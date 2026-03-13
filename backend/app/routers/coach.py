@@ -211,9 +211,11 @@ def get_assignments(student_id: int, db: Session = Depends(get_db)):
 
 @router.post("/students/{student_id}/assignments", response_model=AssignmentOut)
 def assign_test(student_id: int, req: AssignRequest, db: Session = Depends(get_db)):
-    # Assuming coach id is 1 for now (to be updated with proper auth)
+    # Find the first coach user dynamically
+    coach = db.query(models.User).filter(models.User.role == "coach").first()
+    coach_id = coach.id if coach else 1
     a = models.Assignment(
-        coach_id=1,
+        coach_id=coach_id,
         student_id=student_id,
         lesson_id=req.lesson_id,
         status="pending"
