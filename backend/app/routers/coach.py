@@ -77,6 +77,7 @@ class AssignmentOut(BaseModel):
     completed_at: Optional[datetime] = None
     score: Optional[int] = None
     result_id: Optional[int] = None
+    allow_retake: bool = False
     class Config:
         orm_mode = True
 
@@ -186,14 +187,25 @@ def get_assignments(student_id: int, db: Session = Depends(get_db)):
     for a in assignments:
         lesson = db.query(models.Lesson).filter(models.Lesson.id == a.lesson_id).first()
         score = None
-        if a.result_id:
-            res = db.query(models.Result).filter(models.Result.id == a.result_id).first()
-            if res:
-                score = res.score
+        # Always fetch the latest result for this user+lesson (not just the linked result_id)
+        latest_result = db.query(models.Result).filter(
+            models.Result.user_id == student_id,
+            models.Result.lesson_id == a.lesson_id
+        ).order_by(models.Result.submitted_at.desc()).first()
+        if latest_result:
+            score = latest_result.score
+            # Also fix the assignment's result_id if it's stale
+            if a.result_id != latest_result.id:
+                a.result_id = latest_result.id
+                if a.status == "pending":
+                    a.status = "completed"
+                    a.completed_at = latest_result.submitted_at
+                db.commit()
         out.append(AssignmentOut(
             id=a.id, lesson_id=a.lesson_id, lesson_title=lesson.title if lesson else "Unknown",
             lesson_type=lesson.type if lesson else "", status=a.status,
-            created_at=a.created_at, completed_at=a.completed_at, score=score, result_id=a.result_id
+            created_at=a.created_at, completed_at=a.completed_at, score=score, result_id=a.result_id,
+            allow_retake=a.allow_retake or False
         ))
     return out
 
@@ -224,6 +236,16 @@ def delete_assignment(assignment_id: int, db: Session = Depends(get_db)):
     db.delete(a)
     db.commit()
     return {"message": "Assignment deleted"}
+
+
+@router.put("/assignments/{assignment_id}/toggle-retake")
+def toggle_retake(assignment_id: int, db: Session = Depends(get_db)):
+    a = db.query(models.Assignment).filter(models.Assignment.id == assignment_id).first()
+    if not a:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    a.allow_retake = not (a.allow_retake or False)
+    db.commit()
+    return {"message": f"Retake {'allowed' if a.allow_retake else 'denied'}", "allow_retake": a.allow_retake}
 
 
 # ── Student Results ──────────────────────────────────────────────

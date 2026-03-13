@@ -2,6 +2,7 @@
 Authentication Router — login, register, current user info.
 Uses simple token-based auth (JWT).
 """
+import os
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
@@ -15,7 +16,7 @@ from ..database import get_db
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-SECRET_KEY = "lwac-secret-key-change-in-production-2024"
+SECRET_KEY = os.getenv("SECRET_KEY", "lwac-secret-key-change-in-production-2024")
 ALGORITHM = "HS256"
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -106,4 +107,33 @@ def get_me(token: str, db: Session = Depends(get_db)):
         role=user.role,
         avatar_color=user.avatar_color or "#0d9488",
         created_at=user.created_at
+    )
+
+
+class ProfileUpdate(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    avatar_color: Optional[str] = None
+    password: Optional[str] = None
+
+
+@router.put("/profile/{user_id}", response_model=UserResponse)
+def update_profile(user_id: int, req: ProfileUpdate, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if req.full_name is not None:
+        user.full_name = req.full_name
+    if req.email is not None:
+        user.email = req.email
+    if req.avatar_color is not None:
+        user.avatar_color = req.avatar_color
+    if req.password:
+        user.hashed_password = pwd_context.hash(req.password)
+    db.commit()
+    db.refresh(user)
+    return UserResponse(
+        id=user.id, username=user.username, email=user.email or "",
+        full_name=user.full_name or user.username, role=user.role,
+        avatar_color=user.avatar_color or "#0d9488", created_at=user.created_at
     )

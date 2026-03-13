@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, ArrowRight, Play, Pause, RotateCcw, CheckCircle, Headphones, Volume2 } from 'lucide-react';
+import API_URL from '../api';
+import { speakNatural, cancelSpeech } from '../utils/tts';
 
 const ListeningTest = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isViewMode = searchParams.get('view') === 'true';
   const { user } = useAuth();
   const [lesson, setLesson] = useState(null);
   const [allLessons, setAllLessons] = useState([]);
@@ -20,6 +24,8 @@ const ListeningTest = () => {
   const [showTranscript, setShowTranscript] = useState(false);
   const audioRef = useRef(null);
 
+  const storageKey = `lwac_listening_${user?.id}_${id}`;
+
   useEffect(() => {
     setLesson(null);
     setAnswers({});
@@ -32,11 +38,53 @@ const ListeningTest = () => {
     const fetchData = async () => {
       try {
         const [lessonRes, allRes] = await Promise.all([
-          axios.get(`http://127.0.0.1:8000/lessons/${id}`),
-          axios.get('http://127.0.0.1:8000/lessons/')
+          axios.get(`${API_URL}/lessons/${id}`),
+          axios.get(`${API_URL}/lessons/`)
         ]);
         setLesson(lessonRes.data);
         setAllLessons(allRes.data.filter(l => l.type === 'listening'));
+
+        // View mode: load previous result
+        if (isViewMode && user) {
+          try {
+            const resResults = await axios.get(`${API_URL}/results/${user.id}`);
+            const lessonResults = resResults.data.filter(r => r.lesson_id === parseInt(id));
+            if (lessonResults.length > 0) {
+              const latest = lessonResults[lessonResults.length - 1];
+              const questions = lessonRes.data.questions || [];
+              const savedMc = {};
+              const savedFb = {};
+              if (latest.responses) {
+                questions.forEach(q => {
+                  const val = latest.responses[String(q.id)];
+                  if (val !== undefined) {
+                    if (q.type === 'multiple_choice') savedMc[q.id] = val;
+                    else if (q.type === 'fill_blank') savedFb[q.id] = val;
+                  }
+                });
+              }
+              setAnswers(savedMc);
+              setFillAnswers(savedFb);
+              const correctCount = questions.reduce((acc, q) => {
+                if (q.type === 'multiple_choice' && savedMc[q.id] === q.correct_answer) return acc + 1;
+                if (q.type === 'fill_blank' && (savedFb[q.id] || '').trim().toLowerCase() === q.correct_answer.toLowerCase()) return acc + 1;
+                return acc;
+              }, 0);
+              setResult({ score: latest.score, correct: correctCount, total: questions.length });
+              setShowTranscript(true);
+            }
+          } catch (e) { console.error('Failed to load result for view mode', e); }
+        } else if (!isViewMode) {
+          // Restore from localStorage
+          try {
+            const saved = localStorage.getItem(storageKey);
+            if (saved) {
+              const parsed = JSON.parse(saved);
+              if (parsed.answers) setAnswers(parsed.answers);
+              if (parsed.fillAnswers) setFillAnswers(parsed.fillAnswers);
+            }
+          } catch (e) { /* ignore */ }
+        }
       } catch (error) {
         console.error("Failed to load lesson", error);
       } finally {
@@ -46,13 +94,35 @@ const ListeningTest = () => {
     fetchData();
 
     return () => {
-      window.speechSynthesis.cancel();
+      cancelSpeech();
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
       }
     };
   }, [id]);
+
+  // Auto-save to localStorage
+  useEffect(() => {
+    if (isViewMode || result) return;
+    const hasAnswers = Object.keys(answers).length > 0 || Object.keys(fillAnswers).length > 0;
+    if (hasAnswers) {
+      localStorage.setItem(storageKey, JSON.stringify({ answers, fillAnswers }));
+    }
+  }, [answers, fillAnswers]);
+
+  // Save on beforeunload
+  useEffect(() => {
+    if (isViewMode) return;
+    const handleBeforeUnload = () => {
+      const hasAnswers = Object.keys(answers).length > 0 || Object.keys(fillAnswers).length > 0;
+      if (hasAnswers && !result) {
+        localStorage.setItem(storageKey, JSON.stringify({ answers, fillAnswers }));
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [answers, fillAnswers, result, isViewMode]);
 
   const getNextLesson = () => {
     if (!allLessons.length || !lesson) return null;
@@ -81,49 +151,50 @@ const ListeningTest = () => {
     if (lesson?.media_url) {
       // Prioritize actual custom audio upload
       if (!audioRef.current) {
-        // media_url contains the full path including origin
-        audioRef.current = new Audio(lesson.media_url);
+        let audioUrl = lesson.media_url;
+        // If it's a relative path from the new logic, prefix it
+        if (audioUrl.startsWith('/static')) {
+          audioUrl = `${API_URL}${audioUrl}`;
+        }
+        
+        audioRef.current = new Audio(audioUrl);
         audioRef.current.onended = () => {
           setIsPlaying(false);
           setPlayCount(prev => prev + 1);
         };
         audioRef.current.onerror = () => {
-          console.error("Audio error:", audioRef.current.error);
+          console.error("Audio Load Error. URL:", audioUrl, "Error:", audioRef.current.error);
           setIsPlaying(false);
-          alert("Error playing audio file. Please check if it was uploaded correctly.");
+          alert("Error playing audio file. Please check if it was uploaded correctly or if the server is running.");
         };
       }
       audioRef.current.play().then(() => setIsPlaying(true)).catch(e => {
-        console.error(e);
+        console.error("Playback Error:", e);
         setIsPlaying(false);
         alert("Autoplay prevention or other error occurred.");
       });
     } else if (lesson?.content?.transcript) {
-      const utterance = new SpeechSynthesisUtterance(lesson.content.transcript);
-      utterance.lang = 'en-US';
-      utterance.rate = 0.9;
-      utterance.pitch = 1;
-
-      utterance.onstart = () => setIsPlaying(true);
-      utterance.onend = () => {
-        setIsPlaying(false);
-        setPlayCount(prev => prev + 1);
-      };
-      utterance.onerror = () => setIsPlaying(false);
-
-      window.speechSynthesis.speak(utterance);
+      speakNatural(lesson.content.transcript, {
+        rate: 0.9,
+        onstart: () => setIsPlaying(true),
+        onend: () => {
+          setIsPlaying(false);
+          setPlayCount(prev => prev + 1);
+        },
+        onerror: () => setIsPlaying(false),
+      });
     } else {
       alert("No audio available for this lesson.");
     }
   };
 
   const handleAnswerSelect = (questionId, optionKey) => {
-    if (result) return;
+    if (result || isViewMode) return;
     setAnswers({ ...answers, [questionId]: optionKey });
   };
 
   const handleFillChange = (questionId, value) => {
-    if (result) return;
+    if (result || isViewMode) return;
     setFillAnswers({ ...fillAnswers, [questionId]: value });
   };
 
@@ -150,13 +221,15 @@ const ListeningTest = () => {
 
     try {
       const targetUserId = user?.id || 1;
-      await axios.post(`http://127.0.0.1:8000/results/${targetUserId}`, {
+      await axios.post(`${API_URL}/results/${targetUserId}`, {
         lesson_id: lesson.id,
         score: normalizedScore,
         responses: { ...answers, ...fillAnswers }
       });
       setResult({ score: normalizedScore, correct: score, total: lesson.questions.length });
       setShowTranscript(true);
+      // Clear auto-saved data after successful submission
+      localStorage.removeItem(storageKey);
     } catch (error) {
       console.error("Failed to submit results", error);
       alert("Error saving results.");
@@ -342,7 +415,7 @@ const ListeningTest = () => {
                 </div>
               </div>
             </div>
-          ) : (
+          ) : !isViewMode && (
             <div className="fixed md:absolute bottom-16 md:bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-slate-200 flex justify-end z-10">
               <button onClick={handleSubmit} disabled={isSubmitting}
                 className={`flex items-center space-x-2 px-6 py-3 rounded-xl font-semibold shadow-lg transition-transform ${isSubmitting ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-slate-900 hover:bg-slate-800 text-white hover:scale-105'}`}>

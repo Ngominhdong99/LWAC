@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Plus, Trash2, Save, X, FileText, Headphones, Edit3, Mic } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useParams, useNavigate } from 'react-router-dom';
+import API_URL from '../api';
 
 const LessonBuilder = () => {
   const { user } = useAuth();
@@ -36,7 +37,7 @@ const LessonBuilder = () => {
       if (!id) return;
       try {
         setLoading(true);
-        const res = await axios.get(`http://127.0.0.1:8000/lessons/${id}`);
+        const res = await axios.get(`${API_URL}/lessons/${id}`);
         const data = res.data;
         setTitle(data.title || '');
         setChapter(data.chapter || '');
@@ -97,7 +98,7 @@ const LessonBuilder = () => {
     const formData = new FormData();
     formData.append('file', audioFile);
     try {
-      const res = await axios.post('http://127.0.0.1:8000/upload/audio', formData, {
+      const res = await axios.post(`${API_URL}/upload/audio`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       return res.data.url;
@@ -147,7 +148,7 @@ const LessonBuilder = () => {
 
       if (id) {
         // Edit Mode
-        await axios.put(`http://127.0.0.1:8000/lessons/${id}`, lessonPayload);
+        await axios.put(`${API_URL}/lessons/${id}`, lessonPayload);
         
         if (lessonType === 'reading' || lessonType === 'listening') {
           const questionsPayload = questions.map(q => ({
@@ -156,13 +157,13 @@ const LessonBuilder = () => {
              options: q.type === 'multiple_choice' ? q.options : null,
              correct_answer: q.correct_answer
           }));
-          await axios.put(`http://127.0.0.1:8000/lessons/${id}/questions`, questionsPayload);
+          await axios.put(`${API_URL}/lessons/${id}/questions`, questionsPayload);
         }
         alert("Lesson updated successfully!");
         navigate('/coach/lessons');
       } else {
         // Create Mode
-        const lessonRes = await axios.post('http://127.0.0.1:8000/lessons/', lessonPayload);
+        const lessonRes = await axios.post(`${API_URL}/lessons/`, lessonPayload);
         const newLessonId = lessonRes.data.id;
 
         if ((lessonType === 'reading' || lessonType === 'listening') && questions.length > 0) {
@@ -172,7 +173,7 @@ const LessonBuilder = () => {
              options: q.type === 'multiple_choice' ? q.options : null,
              correct_answer: q.correct_answer
           }));
-          await axios.post(`http://127.0.0.1:8000/lessons/${newLessonId}/questions/bulk`, questionsPayload);
+          await axios.post(`${API_URL}/lessons/${newLessonId}/questions/bulk`, questionsPayload);
         }
 
         alert("Lesson created successfully!");

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Mic, Square, Play, Pause, Save, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import API_URL from '../api';
 
 const SpeakingTest = () => {
   const { id } = useParams();
@@ -25,7 +26,7 @@ const SpeakingTest = () => {
   useEffect(() => {
     const fetchLesson = async () => {
       try {
-        const res = await axios.get(`http://127.0.0.1:8000/lessons/${id}`);
+        const res = await axios.get(`${API_URL}/lessons/${id}`);
         setLesson(res.data);
       } catch (e) {
         console.error("Failed to load speaking test:", e);
@@ -113,14 +114,14 @@ const SpeakingTest = () => {
       // append with a dummy filename, router uses uuid
       formData.append('file', audioBlob, 'speaking_answer.webm'); 
       
-      const uploadRes = await axios.post('http://127.0.0.1:8000/upload/audio', formData, {
+      const uploadRes = await axios.post(`${API_URL}/upload/audio`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       
       const uploadedFileUrl = uploadRes.data.url;
 
       // 2. Submit Result with the audio URL
-      await axios.post(`http://127.0.0.1:8000/results/${user?.id || 1}`, {
+      await axios.post(`${API_URL}/results/${user?.id || 1}`, {
         lesson_id: parseInt(id),
         score: 0, // Pending grading
         responses: {

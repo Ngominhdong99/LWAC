@@ -5,6 +5,8 @@ import { useState } from 'react';
 import axios from 'axios';
 import AskTeacherPopup from './AskTeacherPopup';
 import { useAuth } from '../contexts/AuthContext';
+import API_URL from '../api';
+import { speakNatural } from '../utils/tts';
 
 const SmartHoverWord = ({ word, meaning, ipa, audioUrl, lessonId }) => {
   const [saved, setSaved] = useState(false);
@@ -16,15 +18,13 @@ const SmartHoverWord = ({ word, meaning, ipa, audioUrl, lessonId }) => {
       const audio = new Audio(audioUrl);
       audio.play().catch(e => console.error("Audio playback failed", e));
     } else {
-      const utterance = new SpeechSynthesisUtterance(word);
-      utterance.lang = 'en-US';
-      window.speechSynthesis.speak(utterance);
+      speakNatural(word);
     }
   };
 
   const saveToVocabVault = async () => {
     try {
-      await axios.post(`http://127.0.0.1:8000/vocab/${user?.id || 1}`, {
+      await axios.post(`${API_URL}/vocab/${user?.id || 1}`, {
         word, meaning, ipa, audio_url: audioUrl, source_lesson_id: lessonId || null
       });
       setSaved(true);

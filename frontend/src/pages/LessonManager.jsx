@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Trash2, FileText, Headphones, Edit3, Mic, BookOpen, Plus, Save, X } from 'lucide-react';
+import API_URL from '../api';
 
 const LessonManager = () => {
   const [lessons, setLessons] = useState([]);
@@ -22,7 +23,7 @@ const LessonManager = () => {
   const fetchLessons = async () => {
     try {
       setLoading(true);
-      const res = await axios.get('http://127.0.0.1:8000/lessons/');
+      const res = await axios.get(`${API_URL}/lessons/`);
       setLessons(res.data);
     } catch (e) {
       console.error(e);
@@ -42,7 +43,7 @@ const LessonManager = () => {
     }
 
     try {
-      await axios.delete(`http://127.0.0.1:8000/lessons/${id}`);
+      await axios.delete(`${API_URL}/lessons/${id}`);
       setLessons(lessons.filter(l => l.id !== id));
     } catch (e) {
       console.error(e);
@@ -53,7 +54,7 @@ const LessonManager = () => {
   const handleOpenEdit = async (lesson) => {
     try {
       // Fetch full lesson details to get content and questions
-      const res = await axios.get(`http://127.0.0.1:8000/lessons/${lesson.id}`);
+      const res = await axios.get(`${API_URL}/lessons/${lesson.id}`);
       const data = res.data;
       setEditLesson(data);
       setTitle(data.title || '');
@@ -109,7 +110,7 @@ const LessonManager = () => {
     const formData = new FormData();
     formData.append('file', audioFile);
     try {
-      const res = await axios.post('http://127.0.0.1:8000/upload/audio', formData, {
+      const res = await axios.post(`${API_URL}/upload/audio`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       return res.data.url;
@@ -145,7 +146,7 @@ const LessonManager = () => {
       const lessonPayload = { title, chapter, type: lessonType, content, media_url };
 
       // Update lesson
-      await axios.put(`http://127.0.0.1:8000/lessons/${editLesson.id}`, lessonPayload);
+      await axios.put(`${API_URL}/lessons/${editLesson.id}`, lessonPayload);
       
       // Update questions
       if (lessonType === 'reading' || lessonType === 'listening') {
@@ -155,7 +156,7 @@ const LessonManager = () => {
            options: q.type === 'multiple_choice' ? q.options : null,
            correct_answer: q.correct_answer
         }));
-        await axios.put(`http://127.0.0.1:8000/lessons/${editLesson.id}/questions`, questionsPayload);
+        await axios.put(`${API_URL}/lessons/${editLesson.id}/questions`, questionsPayload);
       }
 
       alert("Lesson updated successfully!");
@@ -318,19 +319,44 @@ const LessonManager = () => {
                 <hr className="border-slate-100" />
                 
                 {lessonType === 'listening' && (
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">Audio Upload (Leave empty to keep existing)</label>
-                    <input 
-                      type="file" 
-                      accept="audio/*"
-                      onChange={(e) => setAudioFile(e.target.files[0])}
-                      className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
-                    />
-                    {editLesson.media_url && !audioFile && (
-                      <p className="text-xs text-blue-600 mt-2">Currently using uploaded audio.</p>
-                    )}
-                  </div>
-                )}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Audio Content</label>
+                
+                <input 
+                  type="file" 
+                  accept="audio/*"
+                  onChange={(e) => setAudioFile(e.target.files[0])}
+                  className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+                />
+                
+                {/* Audio Preview Section */}
+                <div className="mt-4 space-y-3">
+                  {audioFile ? (
+                    <div className="space-y-1">
+                      <p className="text-xs font-bold text-primary-600 flex items-center">
+                        <span className="w-2 h-2 bg-primary-600 rounded-full mr-2"></span>
+                        New file selected: {audioFile.name}
+                      </p>
+                      <audio controls src={URL.createObjectURL(audioFile)} className="w-full h-10" />
+                    </div>
+                  ) : editLesson.media_url ? (
+                    <div className="space-y-1">
+                      <p className="text-xs font-bold text-slate-500 flex items-center">
+                        <span className="w-2 h-2 bg-slate-400 rounded-full mr-2"></span>
+                        Using existing audio
+                      </p>
+                      <audio 
+                        controls 
+                        src={editLesson.media_url.startsWith('/static') ? `${API_URL}${editLesson.media_url}` : editLesson.media_url} 
+                        className="w-full h-10" 
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 italic">No audio file uploaded yet.</p>
+                  )}
+                </div>
+              </div>
+            )}
 
                 {(lessonType === 'reading' || lessonType === 'writing' || lessonType === 'listening') && (
                   <div>

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
+import API_URL from '../api';
 
 const AuthContext = createContext(null);
 
@@ -12,7 +13,7 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     if (token) {
-      axios.get(`http://127.0.0.1:8000/auth/me?token=${token}`)
+      axios.get(`${API_URL}/auth/me?token=${token}`)
         .then(res => { setUser(res.data); setLoading(false); })
         .catch(() => { logout(); setLoading(false); });
     } else {
@@ -21,7 +22,7 @@ export const AuthProvider = ({ children }) => {
   }, [token]);
 
   const login = async (username, password) => {
-    const res = await axios.post('http://127.0.0.1:8000/auth/login', { username, password });
+    const res = await axios.post(`${API_URL}/auth/login`, { username, password });
     const { token: newToken, user: userData } = res.data;
     localStorage.setItem('lwac_token', newToken);
     setToken(newToken);
@@ -39,7 +40,7 @@ export const AuthProvider = ({ children }) => {
   const isStudent = user?.role === 'student';
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout, isCoach, isStudent }}>
+    <AuthContext.Provider value={{ user, token, loading, login, logout, isCoach, isStudent, updateUser: setUser }}>
       {children}
     </AuthContext.Provider>
   );

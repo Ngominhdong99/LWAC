@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Search, Volume2, Trash2 } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
+import API_URL from '../api';
+import { speakNatural } from '../utils/tts';
 
 const VocabVault = () => {
   const { user } = useAuth();
@@ -14,7 +16,7 @@ const VocabVault = () => {
     const fetchVocab = async () => {
       try {
         const targetUserId = user?.id || 1;
-        const response = await axios.get(`http://127.0.0.1:8000/vocab/${targetUserId}`);
+        const response = await axios.get(`${API_URL}/vocab/${targetUserId}`);
         const fetchedVocab = response.data.map(v => ({
            id: v.id,
            word: v.word,
@@ -39,14 +41,12 @@ const VocabVault = () => {
   );
 
   const playPronunciation = (word) => {
-    const utterance = new SpeechSynthesisUtterance(word);
-    utterance.lang = 'en-US';
-    window.speechSynthesis.speak(utterance);
+    speakNatural(word);
   };
 
   const removeVocab = async (id) => {
     try {
-      await axios.delete(`http://127.0.0.1:8000/vocab/${id}`);
+      await axios.delete(`${API_URL}/vocab/${id}`);
       setVocabList(vocabList.filter(v => v.id !== id));
     } catch(err) {
       console.error("Failed to delete vocab", err);

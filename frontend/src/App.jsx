@@ -17,6 +17,8 @@ import TeacherQuestions from './pages/TeacherQuestions';
 import LessonBuilder from './pages/LessonBuilder';
 import SpeakingTest from './pages/SpeakingTest';
 import LessonManager from './pages/LessonManager';
+import StudentReward from './pages/StudentReward';
+import CoachReward from './pages/CoachReward';
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, loading } = useAuth();
@@ -43,7 +45,9 @@ function AppRoutes() {
         <Route path="listening/:id" element={<ListeningTest />} />
         <Route path="speaking/:id" element={<SpeakingTest />} />
         <Route path="hub" element={<Hub />} />
+        <Route path="chat" element={<CoachChat />} />
         <Route path="vocab" element={<VocabVault />} />
+        <Route path="rewards" element={<StudentReward />} />
 
         {/* Coach Routes */}
         <Route path="coach" element={<ProtectedRoute allowedRoles={['coach']}><CoachDashboard /></ProtectedRoute>} />
@@ -54,6 +58,7 @@ function AppRoutes() {
         <Route path="coach/builder" element={<ProtectedRoute allowedRoles={['coach']}><LessonBuilder /></ProtectedRoute>} />
         <Route path="coach/builder/:id" element={<ProtectedRoute allowedRoles={['coach']}><LessonBuilder /></ProtectedRoute>} />
         <Route path="coach/lessons" element={<ProtectedRoute allowedRoles={['coach']}><LessonManager /></ProtectedRoute>} />
+        <Route path="coach/rewards" element={<ProtectedRoute allowedRoles={['coach']}><CoachReward /></ProtectedRoute>} />
       </Route>
     </Routes>
   );

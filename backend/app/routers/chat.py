@@ -1,7 +1,7 @@
 """
-Chat Router — AI assistant chat + persistent coach-student messaging + ask-teacher.
+Chat Router — AI assistant chat (persistent) + persistent coach-student messaging + ask-teacher.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
@@ -18,10 +18,19 @@ router = APIRouter(prefix="/chat", tags=["Chat"])
 class AIChatRequest(BaseModel):
     session_id: str = "default"
     message: str
+    user_id: Optional[int] = None
 
 class AIChatResponse(BaseModel):
     reply: str
     session_id: str
+
+class AIChatMessageOut(BaseModel):
+    id: int
+    role: str
+    message: str
+    created_at: datetime
+    class Config:
+        orm_mode = True
 
 class SendMessageRequest(BaseModel):
     sender_id: int
@@ -47,11 +56,50 @@ class AskTeacherRequest(BaseModel):
     lesson_id: Optional[int] = None
 
 
-# ── AI Chat ──────────────────────────────────────────────────────
+# ── AI Chat (persistent) ────────────────────────────────────────
 @router.post("/", response_model=AIChatResponse)
-def ai_chat(request: AIChatRequest):
-    reply = chat_with_assistant(session_id=request.session_id, user_message=request.message)
-    return AIChatResponse(reply=reply, session_id=request.session_id)
+def ai_chat(request: AIChatRequest, db: Session = Depends(get_db)):
+    user_id = request.user_id
+    session_id = request.session_id
+
+    # Save user message to DB
+    if user_id:
+        db_user_msg = models.AIChatMessage(
+            user_id=user_id, role="user", message=request.message, session_id=session_id
+        )
+        db.add(db_user_msg)
+        db.commit()
+
+    # Get AI reply
+    reply = chat_with_assistant(session_id=session_id, user_message=request.message)
+
+    # Save assistant reply to DB
+    if user_id:
+        db_ai_msg = models.AIChatMessage(
+            user_id=user_id, role="assistant", message=reply, session_id=session_id
+        )
+        db.add(db_ai_msg)
+        db.commit()
+
+    return AIChatResponse(reply=reply, session_id=session_id)
+
+
+@router.get("/ai/history/{user_id}", response_model=List[AIChatMessageOut])
+def get_ai_chat_history(
+    user_id: int,
+    limit: int = Query(30, ge=1, le=100),
+    before_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Get AI chat history for a user, paginated (newest first, reversed to chronological)."""
+    query = db.query(models.AIChatMessage).filter(
+        models.AIChatMessage.user_id == user_id
+    )
+    if before_id:
+        query = query.filter(models.AIChatMessage.id < before_id)
+    messages = query.order_by(models.AIChatMessage.id.desc()).limit(limit).all()
+    messages.reverse()  # Return in chronological order
+    return messages
 
 
 # ── Persistent Coach-Student Chat ────────────────────────────────
@@ -70,20 +118,44 @@ def send_message(req: SendMessageRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/history/{user1_id}/{user2_id}", response_model=List[ChatMessageOut])
-def get_chat_history(user1_id: int, user2_id: int, db: Session = Depends(get_db)):
-    messages = db.query(models.ChatMessage).filter(
+def get_chat_history(
+    user1_id: int,
+    user2_id: int,
+    limit: int = Query(30, ge=1, le=100),
+    before_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Get chat history between two users, paginated."""
+    query = db.query(models.ChatMessage).filter(
         ((models.ChatMessage.sender_id == user1_id) & (models.ChatMessage.receiver_id == user2_id)) |
         ((models.ChatMessage.sender_id == user2_id) & (models.ChatMessage.receiver_id == user1_id))
-    ).order_by(models.ChatMessage.created_at.asc()).all()
+    )
+    if before_id:
+        query = query.filter(models.ChatMessage.id < before_id)
+    messages = query.order_by(models.ChatMessage.id.desc()).limit(limit).all()
+    messages.reverse()  # Return in chronological order
+    # Mark messages as read for the requesting user
+    for m in messages:
+        if m.receiver_id == user1_id and not m.is_read:
+            m.is_read = True
+    db.commit()
     return messages
+
+
+@router.get("/unread/{user_id}")
+def get_unread_count(user_id: int, db: Session = Depends(get_db)):
+    """Get count of unread messages for a user."""
+    from sqlalchemy import func
+    count = db.query(func.count(models.ChatMessage.id)).filter(
+        models.ChatMessage.receiver_id == user_id,
+        models.ChatMessage.is_read == False
+    ).scalar()
+    return {"unread": count or 0}
 
 
 @router.get("/conversations/{user_id}")
 def get_conversations(user_id: int, db: Session = Depends(get_db)):
     """Get list of users this person has chatted with + last message."""
-    # Get all distinct user IDs this person has chatted with
-    from sqlalchemy import or_, func, case
-    
     sent = db.query(models.ChatMessage.receiver_id.label("other_id")).filter(
         models.ChatMessage.sender_id == user_id
     ).distinct()

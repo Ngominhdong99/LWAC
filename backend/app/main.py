@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 import os
 from . import models
 from .database import engine
-from .routers import lessons, vocab, results, quiz, chat, auth, coach, upload
+from .routers import lessons, vocab, results, quiz, chat, auth, coach, upload, rewards
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -26,6 +26,7 @@ app.include_router(quiz.router)
 app.include_router(chat.router)
 app.include_router(coach.router)
 app.include_router(upload.router)
+app.include_router(rewards.router)
 
 # Mount static directory for audio playback
 static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")

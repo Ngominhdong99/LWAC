@@ -3,6 +3,7 @@ import axios from 'axios';
 import { HelpCircle, Send, X, CheckCircle, MessageCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { createPortal } from 'react-dom';
+import API_URL from '../api';
 
 const AskTeacherPopup = ({ questionText, questionId, lessonId, onClose }) => {
   const { user } = useAuth();
@@ -19,7 +20,7 @@ const AskTeacherPopup = ({ questionText, questionId, lessonId, onClose }) => {
         return;
       }
       try {
-        const res = await axios.get(`http://127.0.0.1:8000/chat/my-questions/${user.id}`);
+        const res = await axios.get(`${API_URL}/chat/my-questions/${user.id}`);
         const found = res.data.find(q => q.context === questionText);
         if (found) {
           setExistingQ(found);
@@ -37,7 +38,7 @@ const AskTeacherPopup = ({ questionText, questionId, lessonId, onClose }) => {
     if (!question.trim() || !user) return;
     setSending(true);
     try {
-      await axios.post('http://127.0.0.1:8000/chat/ask-teacher', {
+      await axios.post(`${API_URL}/chat/ask-teacher`, {
         student_id: user.id,
         question_text: question,
         context: questionText,

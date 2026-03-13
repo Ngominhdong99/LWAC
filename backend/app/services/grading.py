@@ -4,6 +4,7 @@ Tries multiple models as fallback.
 """
 import os
 import json
+import time
 from google import genai
 from dotenv import load_dotenv
 
@@ -23,9 +24,8 @@ Respond STRICTLY in JSON:
 }"""
 
 MODELS_TO_TRY = [
+    "gemini-2.5-flash-lite",
     "gemini-2.0-flash-lite",
-    "gemini-1.5-flash",
-    "gemini-1.5-flash-8b",
     "gemini-2.0-flash",
 ]
 
@@ -51,25 +51,30 @@ def grade_writing_task(prompt: str, user_response: str) -> dict:
     client = genai.Client(api_key=api_key)
 
     for model_name in MODELS_TO_TRY:
-        try:
-            response = client.models.generate_content(
-                model=model_name,
-                contents=[{"role": "user", "parts": [{"text": user_content}]}],
-                config=genai.types.GenerateContentConfig(
-                    system_instruction=GRADING_PROMPT,
-                    temperature=0.3,
-                    max_output_tokens=800,
-                    response_mime_type="application/json",
-                ),
-            )
-            result_text = response.text
-            print(f"[Grading] Success with model: {model_name}")
-            return json.loads(result_text)
+        for attempt in range(2):  # Retry once on rate limit
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=[{"role": "user", "parts": [{"text": user_content}]}],
+                    config=genai.types.GenerateContentConfig(
+                        system_instruction=GRADING_PROMPT,
+                        temperature=0.3,
+                        max_output_tokens=800,
+                        response_mime_type="application/json",
+                    ),
+                )
+                result_text = response.text
+                print(f"[Grading] Success with model: {model_name}")
+                return json.loads(result_text)
 
-        except Exception as e:
-            error_str = str(e)
-            print(f"[Grading] Model {model_name} failed: {error_str[:100]}")
-            continue
+            except Exception as e:
+                error_str = str(e)
+                print(f"[Grading] Model {model_name} attempt {attempt+1} failed: {error_str[:120]}")
+                if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                    if attempt == 0:
+                        time.sleep(3)  # Brief wait before retry
+                        continue
+                break  # Try next model
 
     print("[Grading] All models failed, returning mock result")
     return mock_result

@@ -5,8 +5,9 @@ import shutil
 
 router = APIRouter(prefix="/upload", tags=["upload"])
 
-# Ensure the upload directory exists relative to this file
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "audio")
+# Ensure the upload directory exists
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+UPLOAD_DIR = os.path.join(BASE_DIR, "static", "audio")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("/audio")
@@ -30,5 +31,5 @@ async def upload_audio(file: UploadFile = File(...)):
     finally:
         file.file.close()
 
-    # Return the URL path that can be mapped via StaticFiles
-    return {"url": f"http://127.0.0.1:8000/static/audio/{unique_filename}"}
+    # Return the relative URL path
+    return {"url": f"/static/audio/{unique_filename}"}

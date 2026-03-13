@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import { Send, ArrowLeft, Users, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import API_URL from '../api';
 
 const CoachChat = () => {
   const { studentId } = useParams();
@@ -15,22 +16,24 @@ const CoachChat = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [inputMsg, setInputMsg] = useState('');
   const [sending, setSending] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const messagesEndRef = useRef(null);
+  const chatContainerRef = useRef(null);
+  const isInitialLoad = useRef(true);
 
   // Fetch conversations list
   useEffect(() => {
     if (!user) return;
     const fetchConvos = async () => {
       try {
-        const res = await axios.get(`http://127.0.0.1:8000/chat/conversations/${user.id}`);
+        const res = await axios.get(`${API_URL}/chat/conversations/${user.id}`);
         setConversations(res.data);
       } catch (e) { console.error(e); }
     };
     fetchConvos();
-    // Also fetch all students if coach (for starting new conversations)
     if (user.role === 'coach') {
-      axios.get('http://127.0.0.1:8000/coach/students').then(res => {
-        // Merge students not in conversations
+      axios.get(`${API_URL}/coach/students`).then(res => {
         const existingIds = new Set(conversations.map(c => c.user_id));
         const newStudents = res.data.filter(s => !existingIds.has(s.id)).map(s => ({
           user_id: s.id, username: s.username, full_name: s.full_name, avatar_color: s.avatar_color, role: 'student', last_message: '', last_time: ''
@@ -43,35 +46,74 @@ const CoachChat = () => {
   // Fetch messages when selecting a user
   useEffect(() => {
     if (!selectedUserId || !user) return;
+    isInitialLoad.current = true;
+    setHasMore(true);
     const fetchMessages = async () => {
       try {
-        const res = await axios.get(`http://127.0.0.1:8000/chat/history/${user.id}/${selectedUserId}`);
+        const res = await axios.get(`${API_URL}/chat/history/${user.id}/${selectedUserId}?limit=30`);
         setMessages(res.data);
-        // Find selected user info
+        setHasMore(res.data.length >= 30);
         const found = conversations.find(c => c.user_id === selectedUserId);
         setSelectedUser(found);
       } catch (e) { console.error(e); }
     };
     fetchMessages();
-    const interval = setInterval(fetchMessages, 5000); // Poll every 5s
+    const interval = setInterval(async () => {
+      try {
+        const res = await axios.get(`${API_URL}/chat/history/${user.id}/${selectedUserId}?limit=30`);
+        setMessages(prev => {
+          if (res.data.length > 0 && prev.length > 0 && res.data[res.data.length - 1].id !== prev[prev.length - 1].id) {
+            return res.data;
+          }
+          return prev;
+        });
+      } catch (e) { /* ignore poll errors */ }
+    }, 5000);
     return () => clearInterval(interval);
   }, [selectedUserId, user]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (isInitialLoad.current && messages.length > 0) {
+      messagesEndRef.current?.scrollIntoView();
+      isInitialLoad.current = false;
+    } else if (!isInitialLoad.current && !loadingMore) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
+
+  // Load older messages on scroll to top
+  const handleScroll = useCallback(() => {
+    const container = chatContainerRef.current;
+    if (!container || !hasMore || loadingMore || messages.length === 0) return;
+    if (container.scrollTop < 60) {
+      const oldestId = messages[0]?.id;
+      if (!oldestId) return;
+      setLoadingMore(true);
+      const prevHeight = container.scrollHeight;
+      axios.get(`${API_URL}/chat/history/${user.id}/${selectedUserId}?limit=20&before_id=${oldestId}`)
+        .then(res => {
+          if (res.data.length === 0) { setHasMore(false); return; }
+          setHasMore(res.data.length >= 20);
+          setMessages(prev => [...res.data, ...prev]);
+          requestAnimationFrame(() => {
+            container.scrollTop = container.scrollHeight - prevHeight;
+          });
+        })
+        .catch(console.error)
+        .finally(() => setLoadingMore(false));
+    }
+  }, [hasMore, loadingMore, messages, user, selectedUserId]);
 
   const handleSend = async (e) => {
     e.preventDefault();
     if (!inputMsg.trim() || !selectedUserId || !user) return;
     setSending(true);
     try {
-      await axios.post('http://127.0.0.1:8000/chat/send', {
+      await axios.post(`${API_URL}/chat/send`, {
         sender_id: user.id, receiver_id: selectedUserId, message: inputMsg
       });
       setInputMsg('');
-      // Refresh messages
-      const res = await axios.get(`http://127.0.0.1:8000/chat/history/${user.id}/${selectedUserId}`);
+      const res = await axios.get(`${API_URL}/chat/history/${user.id}/${selectedUserId}?limit=30`);
       setMessages(res.data);
     } catch (e) { console.error(e); }
     finally { setSending(false); }
@@ -130,7 +172,12 @@ const CoachChat = () => {
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50">
+              <div ref={chatContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50">
+                {loadingMore && (
+                  <div className="flex justify-center py-2">
+                    <Loader2 size={16} className="animate-spin text-primary-400" />
+                  </div>
+                )}
                 {messages.length === 0 && (
                   <p className="text-center text-slate-400 py-8 text-sm">Start a conversation!</p>
                 )}

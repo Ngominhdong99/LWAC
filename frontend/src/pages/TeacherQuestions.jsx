@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { HelpCircle, CheckCircle, Send, Clock } from 'lucide-react';
+import API_URL from '../api';
 
 const TeacherQuestions = () => {
   const [questions, setQuestions] = useState([]);
@@ -10,7 +11,7 @@ const TeacherQuestions = () => {
 
   const fetchQuestions = async () => {
     try {
-      const url = filter === 'all' ? 'http://127.0.0.1:8000/coach/questions' : `http://127.0.0.1:8000/coach/questions?status=${filter}`;
+      const url = filter === 'all' ? `${API_URL}/coach/questions` : `${API_URL}/coach/questions?status=${filter}`;
       const res = await axios.get(url);
       setQuestions(res.data);
     } catch (e) { console.error(e); }
@@ -23,7 +24,7 @@ const TeacherQuestions = () => {
     const answer = answerText[id];
     if (!answer?.trim()) return;
     try {
-      await axios.put(`http://127.0.0.1:8000/coach/questions/${id}/answer`, { answer });
+      await axios.put(`${API_URL}/coach/questions/${id}/answer`, { answer });
       setAnswerText(prev => ({ ...prev, [id]: '' }));
       fetchQuestions();
     } catch (e) { console.error(e); }
