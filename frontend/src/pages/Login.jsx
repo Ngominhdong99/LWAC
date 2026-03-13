@@ -42,9 +42,9 @@ const Login = () => {
             <BookOpen size={32} className="text-primary-400" />
           </div>
           <h1 className="text-3xl font-bold text-white tracking-tight">
-            LWAC<span className="text-primary-400">.</span>
+            SIT<span className="text-primary-400">.</span>
           </h1>
-          <p className="text-slate-400 text-sm mt-1">Learn With Amateur Coach</p>
+          <p className="text-slate-400 text-sm mt-1">Steps with Minh Dong to IELTS</p>
         </div>
 
         {/* Login Card */}

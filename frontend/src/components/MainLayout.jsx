@@ -104,10 +104,10 @@ const MainLayout = () => {
       <aside className="hidden md:flex flex-col w-64 h-screen fixed left-0 top-0 bg-white border-r border-slate-200">
         <div className="p-6">
           <h1 className="text-2xl font-bold tracking-tighter text-primary-800">
-            LWAC<span className="text-primary-500">.</span>
+            SIT<span className="text-primary-500">.</span>
           </h1>
           <p className="text-xs text-slate-500 font-medium tracking-wide mt-1">
-            Learn With Amateur Coach
+            Steps with Minh Dong to IELTS
           </p>
         </div>
         
@@ -166,7 +166,7 @@ const MainLayout = () => {
       {/* Mobile Top Header */}
       <header className="md:hidden fixed top-0 left-0 right-0 bg-white border-b border-slate-200 z-40 px-4 py-3 flex items-center justify-between">
         <h1 className="text-lg font-bold tracking-tighter text-primary-800">
-          LWAC<span className="text-primary-500">.</span>
+          SIT<span className="text-primary-500">.</span>
         </h1>
         <div className="relative">
           <button 
