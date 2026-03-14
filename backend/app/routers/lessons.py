@@ -112,6 +112,12 @@ def delete_lesson(lesson_id: int, db: Session = Depends(get_db)):
     if not lesson:
         raise HTTPException(status_code=404, detail="Lesson not found")
         
+    # Clean up reward_points referencing this lesson or its results
+    result_ids = [r.id for r in db.query(models.Result.id).filter(models.Result.lesson_id == lesson_id).all()]
+    if result_ids:
+        db.query(models.RewardPoint).filter(models.RewardPoint.result_id.in_(result_ids)).delete(synchronize_session=False)
+    db.query(models.RewardPoint).filter(models.RewardPoint.lesson_id == lesson_id).delete(synchronize_session=False)
+    
     # Manual cleanup to avoid foreign key errors from SQLite
     db.query(models.Assignment).filter(models.Assignment.lesson_id == lesson_id).delete(synchronize_session=False)
     db.query(models.TeacherQuestion).filter(models.TeacherQuestion.lesson_id == lesson_id).delete(synchronize_session=False)

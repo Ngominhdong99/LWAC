@@ -4,6 +4,7 @@ from ..database import get_db
 from .. import models, schemas
 from ..services.grading import grade_writing_task
 from typing import Dict, Any
+from datetime import datetime
 
 router = APIRouter(
     prefix="/quiz",
@@ -38,9 +39,6 @@ def submit_writing_task(submission: WritingSubmission, db: Session = Depends(get
     )
     
     # 3. Save result to database
-    # Since writing band scores are floats (e.g. 6.5) and our Result schema expects an integer score,
-    # we'll store the band score inside the JSON responses field for detailed tracking, 
-    # and map the overall score to a 0-100 scale for consistency if needed.
     band_score = evaluation_result.get("estimated_band", 0)
     normalized_score = int((band_score / 9.0) * 100)
     
@@ -58,6 +56,29 @@ def submit_writing_task(submission: WritingSubmission, db: Session = Depends(get
     db.add(db_result)
     db.commit()
     db.refresh(db_result)
+
+    # 4. Update assignment status
+    assignment = db.query(models.Assignment).filter(
+        models.Assignment.student_id == submission.user_id,
+        models.Assignment.lesson_id == submission.lesson_id
+    ).first()
+    if assignment:
+        assignment.status = "completed"
+        assignment.completed_at = datetime.utcnow()
+        assignment.result_id = db_result.id
+        assignment.allow_retake = False
+        db.commit()
+
+    # 5. Award reward points (+5 for writing submission)
+    rp = models.RewardPoint(
+        user_id=submission.user_id,
+        lesson_id=submission.lesson_id,
+        result_id=db_result.id,
+        points=5,
+        reason="Writing submission"
+    )
+    db.add(rp)
+    db.commit()
 
     return {
         "result_id": db_result.id,

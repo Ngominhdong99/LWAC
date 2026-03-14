@@ -23,6 +23,7 @@ const ListeningTest = () => {
   const [playCount, setPlayCount] = useState(0);
   const [showTranscript, setShowTranscript] = useState(false);
   const audioRef = useRef(null);
+  const [audioSrc, setAudioSrc] = useState(null);
 
   const storageKey = `lwac_listening_${user?.id}_${id}`;
 
@@ -97,7 +98,6 @@ const ListeningTest = () => {
       cancelSpeech();
       if (audioRef.current) {
         audioRef.current.pause();
-        audioRef.current = null;
       }
     };
   }, [id]);
@@ -136,7 +136,7 @@ const ListeningTest = () => {
       if (audioRef.current) {
         audioRef.current.pause();
       } else {
-        window.speechSynthesis.cancel();
+        cancelSpeech();
       }
       setIsPlaying(false);
       return;
@@ -149,30 +149,22 @@ const ListeningTest = () => {
     }
 
     if (lesson?.media_url) {
-      // Prioritize actual custom audio upload
-      if (!audioRef.current) {
-        let audioUrl = lesson.media_url;
-        // If it's a relative path from the new logic, prefix it
-        if (audioUrl.startsWith('/static')) {
-          audioUrl = `${API_URL}${audioUrl}`;
-        }
-        
-        audioRef.current = new Audio(audioUrl);
-        audioRef.current.onended = () => {
-          setIsPlaying(false);
-          setPlayCount(prev => prev + 1);
-        };
-        audioRef.current.onerror = () => {
-          console.error("Audio Load Error. URL:", audioUrl, "Error:", audioRef.current.error);
-          setIsPlaying(false);
-          alert("Error playing audio file. Please check if it was uploaded correctly or if the server is running.");
-        };
+      // Use DOM audio element for mobile compatibility
+      let audioUrl = lesson.media_url;
+      if (audioUrl.startsWith('/static')) {
+        audioUrl = `${API_URL}${audioUrl}`;
       }
-      audioRef.current.play().then(() => setIsPlaying(true)).catch(e => {
-        console.error("Playback Error:", e);
-        setIsPlaying(false);
-        alert("Autoplay prevention or other error occurred.");
-      });
+      setAudioSrc(audioUrl);
+      // Wait a tick for src to update, then play
+      setTimeout(() => {
+        if (audioRef.current) {
+          audioRef.current.play().then(() => setIsPlaying(true)).catch(e => {
+            console.error("Playback Error:", e);
+            setIsPlaying(false);
+            alert("Could not play audio. Please tap the play button again.");
+          });
+        }
+      }, 100);
     } else if (lesson?.content?.transcript) {
       speakNatural(lesson.content.transcript, {
         rate: 0.9,
@@ -247,6 +239,15 @@ const ListeningTest = () => {
 
   return (
     <div className="h-full flex flex-col bg-secondary">
+      {/* Hidden audio element for mobile compatibility */}
+      <audio
+        ref={audioRef}
+        src={audioSrc}
+        preload="auto"
+        onEnded={() => { setIsPlaying(false); setPlayCount(prev => prev + 1); }}
+        onError={() => { setIsPlaying(false); console.error('Audio element error'); }}
+        style={{ display: 'none' }}
+      />
       {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-40">
         <div className="flex items-center justify-between px-4 py-3">

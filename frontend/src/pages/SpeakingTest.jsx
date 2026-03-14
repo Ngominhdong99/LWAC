@@ -1,16 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
-import { Mic, Square, Play, Pause, Save, ArrowLeft } from 'lucide-react';
+import { Mic, Square, Play, Pause, Save, ArrowLeft, CheckCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import API_URL from '../api';
 
 const SpeakingTest = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isViewMode = searchParams.get('view') === 'true';
   const { user } = useAuth();
   const [lesson, setLesson] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [submitted, setSubmitted] = useState(false);
 
   // Recording State
   const [isRecording, setIsRecording] = useState(false);
@@ -18,25 +21,47 @@ const SpeakingTest = () => {
   const [audioBlob, setAudioBlob] = useState(null);
   const [recordingTime, setRecordingTime] = useState(0);
   
+  // View mode: saved audio from previous submission
+  const [savedAudioUrl, setSavedAudioUrl] = useState(null);
+
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const timerRef = useRef(null);
-  const audioPlayerRef = useRef(null);
 
   useEffect(() => {
-    const fetchLesson = async () => {
+    const fetchData = async () => {
       try {
         const res = await axios.get(`${API_URL}/lessons/${id}`);
         setLesson(res.data);
+
+        // View mode or check if already submitted: load previous result
+        if (user) {
+          try {
+            const resResults = await axios.get(`${API_URL}/results/${user.id}`);
+            const lessonResults = resResults.data.filter(r => r.lesson_id === parseInt(id));
+            if (lessonResults.length > 0) {
+              const latest = lessonResults[lessonResults.length - 1];
+              if (latest.responses?.user_audio_url) {
+                const audioSrc = latest.responses.user_audio_url.startsWith('/static')
+                  ? `${API_URL}${latest.responses.user_audio_url}`
+                  : latest.responses.user_audio_url;
+                setSavedAudioUrl(audioSrc);
+              }
+              if (!isViewMode) {
+                // Already submitted before — mark as submitted so they can't get double points
+                setSubmitted(true);
+              }
+            }
+          } catch (e) { console.error('Failed to load previous result', e); }
+        }
       } catch (e) {
         console.error("Failed to load speaking test:", e);
       } finally {
         setLoading(false);
       }
     };
-    fetchLesson();
+    fetchData();
     
-    // Cleanup
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
@@ -64,12 +89,10 @@ const SpeakingTest = () => {
       };
 
       mediaRecorderRef.current.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const url = URL.createObjectURL(audioBlob);
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const url = URL.createObjectURL(blob);
         setAudioUrl(url);
-        setAudioBlob(audioBlob);
-        
-        // Stop all tracks to release mic
+        setAudioBlob(blob);
         stream.getTracks().forEach(track => track.stop());
       };
 
@@ -109,9 +132,7 @@ const SpeakingTest = () => {
 
     setLoading(true);
     try {
-      // 1. Upload audio blob to static server
       const formData = new FormData();
-      // append with a dummy filename, router uses uuid
       formData.append('file', audioBlob, 'speaking_answer.webm'); 
       
       const uploadRes = await axios.post(`${API_URL}/upload/audio`, formData, {
@@ -120,16 +141,16 @@ const SpeakingTest = () => {
       
       const uploadedFileUrl = uploadRes.data.url;
 
-      // 2. Submit Result with the audio URL
       await axios.post(`${API_URL}/results/${user?.id || 1}`, {
         lesson_id: parseInt(id),
-        score: 0, // Pending grading
+        score: 0,
         responses: {
           user_audio_url: uploadedFileUrl
         }
       });
       
-      navigate('/');
+      setSubmitted(true);
+      setSavedAudioUrl(uploadedFileUrl.startsWith('/static') ? `${API_URL}${uploadedFileUrl}` : uploadedFileUrl);
     } catch (e) {
       console.error("Failed to submit speaking test:", e);
       alert("Error submitting your recording. Please try again.");
@@ -140,6 +161,9 @@ const SpeakingTest = () => {
 
   if (loading && !lesson) return <div className="p-8 flex justify-center items-center h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div></div>;
   if (!lesson) return <div className="p-8 text-center text-slate-500">Test not found.</div>;
+
+  // Determine if we should show read-only view
+  const isReadOnly = isViewMode || submitted;
 
   return (
     <div className="flex flex-col h-full bg-secondary">
@@ -152,6 +176,11 @@ const SpeakingTest = () => {
              <h1 className="text-3xl font-bold tracking-tight text-slate-900">{lesson.title}</h1>
              <p className="text-slate-500 mt-1">{lesson.chapter} • Speaking</p>
           </div>
+          {isViewMode && (
+            <span className="bg-primary-50 text-primary-700 px-4 py-2 rounded-xl text-sm font-bold">
+              View Mode
+            </span>
+          )}
         </header>
 
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 space-y-8">
@@ -164,9 +193,41 @@ const SpeakingTest = () => {
                 </p>
             </div>
 
-            <div className="flex flex-col items-center py-10 space-y-6">
-                
-                {/* Visualizer / Timer Output */}
+            {/* Submitted / View Mode — show saved audio only */}
+            {isReadOnly && savedAudioUrl ? (
+              <div className="flex flex-col items-center py-10 space-y-6">
+                <div className="flex items-center space-x-3 text-green-600 mb-2">
+                  <CheckCircle size={28} />
+                  <span className="text-xl font-bold">{isViewMode ? 'Your Submission' : 'Submitted Successfully!'}</span>
+                </div>
+                <div className="w-full max-w-md">
+                  <p className="text-sm text-slate-500 mb-3 text-center font-medium">Your recorded answer:</p>
+                  <audio src={savedAudioUrl} controls className="w-full" />
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => navigate('/reading')}
+                    className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-colors"
+                  >
+                    All Lessons
+                  </button>
+                </div>
+              </div>
+            ) : isReadOnly && !savedAudioUrl ? (
+              <div className="flex flex-col items-center py-10 space-y-4">
+                <CheckCircle size={32} className="text-green-500" />
+                <p className="text-lg font-bold text-slate-800">Already Submitted</p>
+                <p className="text-sm text-slate-500">Your recording has been submitted.</p>
+                <button
+                  onClick={() => navigate('/reading')}
+                  className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-colors"
+                >
+                  All Lessons
+                </button>
+              </div>
+            ) : (
+              /* Normal recording mode */
+              <div className="flex flex-col items-center py-10 space-y-6">
                 <div className={`text-5xl font-mono font-bold tracking-tighter ${isRecording ? 'text-red-500 animate-pulse' : 'text-slate-700'}`}>
                     {formatTime(recordingTime)}
                 </div>
@@ -193,7 +254,7 @@ const SpeakingTest = () => {
                     </div>
                 ) : (
                     <div className="w-full max-w-md space-y-6 flex flex-col items-center">
-                        <audio ref={audioPlayerRef} src={audioUrl} controls className="w-full" />
+                        <audio src={audioUrl} controls className="w-full" />
                         <div className="flex space-x-4 w-full">
                             <button 
                                 onClick={resetRecording}
@@ -212,10 +273,14 @@ const SpeakingTest = () => {
                         </div>
                     </div>
                 )}
-            </div>
+              </div>
+            )}
 
             <p className="text-sm text-center text-slate-400 max-w-lg mx-auto">
-                Read the prompt carefully. Take a moment to think about your answer, then press Record. When you are finished speaking, press Stop to review your audio.
+                {isReadOnly 
+                  ? 'This is your submitted recording. You cannot re-record after submission.'
+                  : 'Read the prompt carefully. Take a moment to think about your answer, then press Record. When you are finished speaking, press Stop to review your audio.'
+                }
             </p>
         </div>
       </div>

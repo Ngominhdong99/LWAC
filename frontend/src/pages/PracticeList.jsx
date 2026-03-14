@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { BookOpen, PenTool, Headphones, CheckCircle, Eye, PlayCircle } from 'lucide-react';
+import { BookOpen, PenTool, Headphones, Mic, CheckCircle, Eye, PlayCircle } from 'lucide-react';
 import API_URL from '../api';
 
 const TYPE_CONFIG = {
   reading:   { label: 'Reading',   color: 'bg-primary-50 text-primary-700', icon: BookOpen,   btnHover: 'hover:bg-primary-600' },
   writing:   { label: 'Writing',   color: 'bg-amber-50 text-amber-700',     icon: PenTool,    btnHover: 'hover:bg-amber-600' },
   listening: { label: 'Listening', color: 'bg-violet-50 text-violet-700',   icon: Headphones, btnHover: 'hover:bg-violet-600' },
+  speaking:  { label: 'Speaking',  color: 'bg-rose-50 text-rose-700',       icon: Mic,        btnHover: 'hover:bg-rose-600' },
 };
 
 const PracticeList = () => {
@@ -65,6 +66,7 @@ const PracticeList = () => {
     const getTestPath = (lesson) => {
         if (lesson.type === 'writing') return `/writing/${lesson.id}`;
         if (lesson.type === 'listening') return `/listening/${lesson.id}`;
+        if (lesson.type === 'speaking') return `/speaking/${lesson.id}`;
         return `/reading/${lesson.id}`;
     };
 
@@ -82,6 +84,7 @@ const PracticeList = () => {
       reading: lessons.filter(l => l.type === 'reading').length,
       writing: lessons.filter(l => l.type === 'writing').length,
       listening: lessons.filter(l => l.type === 'listening').length,
+      speaking: lessons.filter(l => l.type === 'speaking').length,
     };
 
     if (loading) return <div className="p-8 flex justify-center items-center h-[calc(100vh-100px)]"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600"></div></div>;
@@ -100,6 +103,7 @@ const PracticeList = () => {
                 { key: 'reading',   label: 'Reading' },
                 { key: 'writing',   label: 'Writing' },
                 { key: 'listening', label: 'Listening' },
+                { key: 'speaking',  label: 'Speaking' },
               ].map(tab => (
                 <button
                   key={tab.key}

@@ -163,8 +163,19 @@ const ReadingTest = () => {
       }
     };
 
+    // Prevent native context menu on text area (mobile)
+    const preventContextMenu = (e) => {
+      if (textRef.current && textRef.current.contains(e.target)) {
+        e.preventDefault();
+      }
+    };
+
     document.addEventListener('selectionchange', handleSelectionChange);
-    return () => document.removeEventListener('selectionchange', handleSelectionChange);
+    document.addEventListener('contextmenu', preventContextMenu);
+    return () => {
+      document.removeEventListener('selectionchange', handleSelectionChange);
+      document.removeEventListener('contextmenu', preventContextMenu);
+    };
   }, [askTeacherText]);
 
   const getNextLesson = () => {
