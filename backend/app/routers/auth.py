@@ -96,6 +96,22 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     ))
 
 
+@router.get("/users")
+def list_users(db: Session = Depends(get_db)):
+    """Return all users (basic info). Used by chat to discover contacts."""
+    users = db.query(models.User).all()
+    return [
+        {
+            "id": u.id,
+            "username": u.username,
+            "full_name": u.full_name or u.username,
+            "role": u.role,
+            "avatar_color": u.avatar_color or "#0d9488",
+        }
+        for u in users
+    ]
+
+
 @router.get("/me", response_model=UserResponse)
 def get_me(token: str, db: Session = Depends(get_db)):
     user = get_current_user(token, db)

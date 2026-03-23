@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import { Gift, Star, Upload, ArrowRight, Clock, CheckCircle, Trophy, Coins, Flame, CalendarCheck } from 'lucide-react';
+import API_URL from '../api';
 
 const StudentReward = () => {
   const { user } = useAuth();
@@ -19,11 +20,11 @@ const StudentReward = () => {
     if (!user) return;
     try {
       const [balRes, histRes, reqRes, qrRes, ciRes] = await Promise.all([
-        axios.get(`http://127.0.0.1:8000/rewards/points/${user.id}`),
-        axios.get(`http://127.0.0.1:8000/rewards/history/${user.id}`),
-        axios.get(`http://127.0.0.1:8000/rewards/my-requests/${user.id}`),
-        axios.get(`http://127.0.0.1:8000/rewards/qr/${user.id}`),
-        axios.get(`http://127.0.0.1:8000/rewards/checkin/${user.id}`),
+        axios.get(`${API_URL}/rewards/points/${user.id}`),
+        axios.get(`${API_URL}/rewards/history/${user.id}`),
+        axios.get(`${API_URL}/rewards/my-requests/${user.id}`),
+        axios.get(`${API_URL}/rewards/qr/${user.id}`),
+        axios.get(`${API_URL}/rewards/checkin/${user.id}`),
       ]);
       setBalance(balRes.data);
       setHistory(histRes.data);
@@ -36,7 +37,7 @@ const StudentReward = () => {
   const handleCheckIn = async () => {
     setCheckingIn(true);
     try {
-      await axios.post(`http://127.0.0.1:8000/rewards/checkin/${user.id}`);
+      await axios.post(`${API_URL}/rewards/checkin/${user.id}`);
       await fetchData();
     } catch (e) { alert(e.response?.data?.detail || 'Check-in failed'); }
     finally { setCheckingIn(false); }
@@ -51,7 +52,7 @@ const StudentReward = () => {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await axios.post(`http://127.0.0.1:8000/rewards/qr/${user.id}`, formData);
+      const res = await axios.post(`${API_URL}/rewards/qr/${user.id}`, formData);
       setQrUrl(res.data.qr_url);
     } catch (e) { alert('Upload failed'); }
     finally { setUploading(false); }
@@ -62,8 +63,8 @@ const StudentReward = () => {
     if (!qrUrl) return alert('Please upload your QR code first!');
     setRedeeming(true);
     try {
-      const fullQrUrl = qrUrl.startsWith('/static') ? `http://127.0.0.1:8000${qrUrl}` : qrUrl;
-      await axios.post(`http://127.0.0.1:8000/rewards/redeem/${user.id}?qr_url=${encodeURIComponent(fullQrUrl)}`);
+      const fullQrUrl = qrUrl.startsWith('/static') ? `${API_URL}${qrUrl}` : qrUrl;
+      await axios.post(`${API_URL}/rewards/redeem/${user.id}?qr_url=${encodeURIComponent(fullQrUrl)}`);
       await fetchData();
     } catch (e) { alert(e.response?.data?.detail || 'Redemption failed'); }
     finally { setRedeeming(false); }
@@ -187,7 +188,7 @@ const StudentReward = () => {
               {qrUrl ? (
                 <div className="space-y-3">
                   <img 
-                    src={qrUrl.startsWith('/static') ? `http://127.0.0.1:8000${qrUrl}` : qrUrl} 
+                    src={qrUrl.startsWith('/static') ? `${API_URL}${qrUrl}` : qrUrl} 
                     alt="Your QR Code" 
                     className="max-h-40 mx-auto rounded-lg shadow"
                   />

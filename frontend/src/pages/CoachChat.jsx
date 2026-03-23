@@ -20,27 +20,63 @@ const CoachChat = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
+  const inputRef = useRef(null);
   const isInitialLoad = useRef(true);
 
-  // Fetch conversations list
+  // Fetch conversations list + merge all contacts
   useEffect(() => {
     if (!user) return;
-    const fetchConvos = async () => {
+    const fetchAll = async () => {
       try {
-        const res = await axios.get(`${API_URL}/chat/conversations/${user.id}`);
-        setConversations(res.data);
-      } catch (e) { console.error(e); }
+        // 1. Get existing conversations (people we've chatted with)
+        const convRes = await axios.get(`${API_URL}/chat/conversations/${user.id}`);
+        const existingConvos = convRes.data;
+        const existingIds = new Set(existingConvos.map(c => c.user_id));
+
+        let allContacts = [...existingConvos];
+
+        if (user.role === 'coach') {
+          // 2. Coach: also fetch ALL students, merge those not yet chatted with
+          try {
+            const studentsRes = await axios.get(`${API_URL}/coach/students`);
+            const newStudents = studentsRes.data
+              .filter(s => !existingIds.has(s.id))
+              .map(s => ({
+                user_id: s.id,
+                username: s.username,
+                full_name: s.full_name || s.username,
+                avatar_color: s.avatar_color || '#0d9488',
+                role: 'student',
+                last_message: '',
+                last_time: ''
+              }));
+            allContacts = [...allContacts, ...newStudents];
+          } catch (e) { console.error('Failed to fetch students', e); }
+        } else {
+          // 3. Student: fetch ALL coaches, merge those not yet chatted with
+          try {
+            const usersRes = await axios.get(`${API_URL}/auth/users`);
+            const coaches = usersRes.data
+              .filter(u => u.role === 'coach' && !existingIds.has(u.id))
+              .map(c => ({
+                user_id: c.id,
+                username: c.username,
+                full_name: c.full_name || c.username,
+                avatar_color: c.avatar_color || '#0d9488',
+                role: 'coach',
+                last_message: '',
+                last_time: ''
+              }));
+            allContacts = [...allContacts, ...coaches];
+          } catch (e) { console.error('Failed to fetch coaches', e); }
+        }
+
+        setConversations(allContacts);
+      } catch (e) {
+        console.error('Failed to fetch conversations', e);
+      }
     };
-    fetchConvos();
-    if (user.role === 'coach') {
-      axios.get(`${API_URL}/coach/students`).then(res => {
-        const existingIds = new Set(conversations.map(c => c.user_id));
-        const newStudents = res.data.filter(s => !existingIds.has(s.id)).map(s => ({
-          user_id: s.id, username: s.username, full_name: s.full_name, avatar_color: s.avatar_color, role: 'student', last_message: '', last_time: ''
-        }));
-        setConversations(prev => [...prev, ...newStudents]);
-      }).catch(() => {});
-    }
+    fetchAll();
   }, [user]);
 
   // Fetch messages when selecting a user
@@ -65,12 +101,15 @@ const CoachChat = () => {
           if (res.data.length > 0 && prev.length > 0 && res.data[res.data.length - 1].id !== prev[prev.length - 1].id) {
             return res.data;
           }
+          if (res.data.length > 0 && prev.length === 0) {
+            return res.data;
+          }
           return prev;
         });
       } catch (e) { /* ignore poll errors */ }
     }, 5000);
     return () => clearInterval(interval);
-  }, [selectedUserId, user]);
+  }, [selectedUserId, user, conversations]);
 
   useEffect(() => {
     if (isInitialLoad.current && messages.length > 0) {
@@ -80,6 +119,13 @@ const CoachChat = () => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
+
+  // Focus input when selecting a user
+  useEffect(() => {
+    if (selectedUserId) {
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [selectedUserId]);
 
   // Load older messages on scroll to top
   const handleScroll = useCallback(() => {
@@ -116,7 +162,11 @@ const CoachChat = () => {
       const res = await axios.get(`${API_URL}/chat/history/${user.id}/${selectedUserId}?limit=30`);
       setMessages(res.data);
     } catch (e) { console.error(e); }
-    finally { setSending(false); }
+    finally {
+      setSending(false);
+      // Re-focus input after sending
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
   };
 
   return (
@@ -132,7 +182,7 @@ const CoachChat = () => {
           <div className="p-3 border-b border-slate-200">
             <div className="flex items-center space-x-2 text-sm font-semibold text-slate-600">
               <Users size={16} />
-              <span>{user?.role === 'coach' ? 'Students' : 'Contacts'}</span>
+              <span>{user?.role === 'coach' ? 'Students' : 'Coaches'}</span>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto">
@@ -148,7 +198,7 @@ const CoachChat = () => {
                 </div>
               </button>
             ))}
-            {conversations.length === 0 && <p className="text-slate-400 text-sm text-center py-8">No conversations yet</p>}
+            {conversations.length === 0 && <p className="text-slate-400 text-sm text-center py-8">No contacts found</p>}
           </div>
         </div>
 
@@ -200,8 +250,8 @@ const CoachChat = () => {
 
               {/* Input */}
               <form onSubmit={handleSend} className="p-3 bg-white border-t border-slate-200 flex space-x-2">
-                <input type="text" value={inputMsg} onChange={e => setInputMsg(e.target.value)}
-                  placeholder="Type a message..." disabled={sending}
+                <input ref={inputRef} type="text" value={inputMsg} onChange={e => setInputMsg(e.target.value)}
+                  placeholder="Type a message..." disabled={sending} autoFocus
                   className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
                 <button type="submit" disabled={!inputMsg.trim() || sending}
                   className={`p-2.5 rounded-xl transition-colors ${!inputMsg.trim() || sending ? 'bg-slate-100 text-slate-400' : 'bg-primary-600 text-white hover:bg-primary-700'}`}>
