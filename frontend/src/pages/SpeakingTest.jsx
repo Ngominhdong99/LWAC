@@ -27,6 +27,34 @@ const SpeakingTest = () => {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const timerRef = useRef(null);
+  const recordedMimeTypeRef = useRef('audio/webm');
+
+  // Detect the best supported audio MIME type for recording
+  const getSupportedMimeType = () => {
+    const types = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/mp4',
+      'audio/ogg;codecs=opus',
+      'audio/ogg',
+      'audio/wav',
+    ];
+    for (const type of types) {
+      if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) {
+        return type;
+      }
+    }
+    return ''; // fallback: let browser decide
+  };
+
+  // Map MIME type to file extension for upload
+  const getFileExtension = (mimeType) => {
+    if (mimeType.includes('webm')) return '.webm';
+    if (mimeType.includes('mp4')) return '.mp4';
+    if (mimeType.includes('ogg')) return '.ogg';
+    if (mimeType.includes('wav')) return '.wav';
+    return '.webm';
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -79,7 +107,12 @@ const SpeakingTest = () => {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorderRef.current = new MediaRecorder(stream);
+      
+      // Use the best supported MIME type for this device/browser
+      const mimeType = getSupportedMimeType();
+      const recorderOptions = mimeType ? { mimeType } : {};
+      mediaRecorderRef.current = new MediaRecorder(stream, recorderOptions);
+      recordedMimeTypeRef.current = mediaRecorderRef.current.mimeType || mimeType || 'audio/webm';
       audioChunksRef.current = [];
 
       mediaRecorderRef.current.ondataavailable = (event) => {
@@ -89,14 +122,16 @@ const SpeakingTest = () => {
       };
 
       mediaRecorderRef.current.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const actualMime = recordedMimeTypeRef.current;
+        const blob = new Blob(audioChunksRef.current, { type: actualMime });
         const url = URL.createObjectURL(blob);
         setAudioUrl(url);
         setAudioBlob(blob);
         stream.getTracks().forEach(track => track.stop());
       };
 
-      mediaRecorderRef.current.start();
+      // Use timeslice (1s) to collect data periodically — more reliable on mobile
+      mediaRecorderRef.current.start(1000);
       setIsRecording(true);
       setRecordingTime(0);
       
@@ -132,8 +167,9 @@ const SpeakingTest = () => {
 
     setLoading(true);
     try {
+      const ext = getFileExtension(recordedMimeTypeRef.current);
       const formData = new FormData();
-      formData.append('file', audioBlob, 'speaking_answer.webm'); 
+      formData.append('file', audioBlob, `speaking_answer${ext}`);
       
       const uploadRes = await axios.post(`${API_URL}/upload/audio`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
