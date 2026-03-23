@@ -10,8 +10,12 @@ from datetime import datetime
 from .. import models
 from ..database import get_db
 from ..services.chat import chat_with_assistant
+from datetime import timedelta
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
+
+# In-memory typing status: {(sender_id, receiver_id): last_typing_time}
+_typing_status = {}
 
 
 # ── Schemas ──────────────────────────────────────────────────────
@@ -228,3 +232,53 @@ def get_my_questions(student_id: int, db: Session = Depends(get_db)):
             "answered_at": tq.answered_at.isoformat() if tq.answered_at else None
         })
     return result
+
+
+# ── Presence & Typing ────────────────────────────────────────────
+
+@router.post("/heartbeat/{user_id}")
+def heartbeat(user_id: int, db: Session = Depends(get_db)):
+    """Update user's last_active timestamp. Call every ~30s from frontend."""
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if user:
+        user.last_active = datetime.utcnow()
+        db.commit()
+    return {"ok": True}
+
+
+@router.get("/online-status")
+def get_online_status(user_ids: str = Query(..., description="Comma-separated user IDs"), db: Session = Depends(get_db)):
+    """Check online status for a list of users. Online = active within last 2 minutes."""
+    ids = [int(x.strip()) for x in user_ids.split(",") if x.strip().isdigit()]
+    cutoff = datetime.utcnow() - timedelta(minutes=2)
+    users = db.query(models.User.id, models.User.last_active).filter(models.User.id.in_(ids)).all()
+    result = {}
+    for u in users:
+        is_online = u.last_active is not None and u.last_active >= cutoff
+        result[str(u.id)] = {
+            "online": is_online,
+            "last_active": u.last_active.isoformat() + "Z" if u.last_active else None
+        }
+    return result
+
+
+class TypingSignal(BaseModel):
+    sender_id: int
+    receiver_id: int
+
+
+@router.post("/typing")
+def signal_typing(req: TypingSignal):
+    """Signal that a user is typing to another user."""
+    _typing_status[(req.sender_id, req.receiver_id)] = datetime.utcnow()
+    return {"ok": True}
+
+
+@router.get("/typing/{user_id}/{other_id}")
+def get_typing_status(user_id: int, other_id: int):
+    """Check if other_id is currently typing to user_id. Typing expires after 4 seconds."""
+    last = _typing_status.get((other_id, user_id))
+    if last and (datetime.utcnow() - last).total_seconds() < 4:
+        return {"is_typing": True}
+    return {"is_typing": False}
+

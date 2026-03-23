@@ -16,6 +16,7 @@ class User(Base):
     role = Column(String, default="student")  # student or coach
     avatar_color = Column(String, default="#0d9488")  # teal default
     created_at = Column(DateTime, default=datetime.utcnow)
+    last_active = Column(DateTime, nullable=True)  # online presence tracking
 
     vocab_vault = relationship("VocabVault", back_populates="user")
     results = relationship("Result", back_populates="user")

@@ -6,6 +6,19 @@ import { Send, ArrowLeft, Users, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import API_URL from '../api';
 
+// Relative time formatter like Messenger
+const timeAgo = (isoString) => {
+  if (!isoString) return 'Offline';
+  const now = Date.now();
+  const then = new Date(isoString).getTime();
+  const diff = Math.max(0, Math.floor((now - then) / 1000));
+  if (diff < 60) return 'Active just now';
+  if (diff < 3600) return `Active ${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `Active ${Math.floor(diff / 3600)}h ago`;
+  if (diff < 172800) return 'Active yesterday';
+  return `Active ${Math.floor(diff / 86400)}d ago`;
+};
+
 const CoachChat = () => {
   const { studentId } = useParams();
   const { user } = useAuth();
@@ -18,66 +31,94 @@ const CoachChat = () => {
   const [sending, setSending] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [onlineStatus, setOnlineStatus] = useState({});
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
   const inputRef = useRef(null);
   const isInitialLoad = useRef(true);
+  const typingTimeoutRef = useRef(null);
 
   // Fetch conversations list + merge all contacts
   useEffect(() => {
     if (!user) return;
     const fetchAll = async () => {
       try {
-        // 1. Get existing conversations (people we've chatted with)
         const convRes = await axios.get(`${API_URL}/chat/conversations/${user.id}`);
         const existingConvos = convRes.data;
         const existingIds = new Set(existingConvos.map(c => c.user_id));
-
         let allContacts = [...existingConvos];
 
         if (user.role === 'coach') {
-          // 2. Coach: also fetch ALL students, merge those not yet chatted with
           try {
             const studentsRes = await axios.get(`${API_URL}/coach/students`);
             const newStudents = studentsRes.data
               .filter(s => !existingIds.has(s.id))
               .map(s => ({
-                user_id: s.id,
-                username: s.username,
+                user_id: s.id, username: s.username,
                 full_name: s.full_name || s.username,
                 avatar_color: s.avatar_color || '#0d9488',
-                role: 'student',
-                last_message: '',
-                last_time: ''
+                role: 'student', last_message: '', last_time: ''
               }));
             allContacts = [...allContacts, ...newStudents];
           } catch (e) { console.error('Failed to fetch students', e); }
         } else {
-          // 3. Student: fetch ALL coaches, merge those not yet chatted with
           try {
             const usersRes = await axios.get(`${API_URL}/auth/users`);
             const coaches = usersRes.data
               .filter(u => u.role === 'coach' && !existingIds.has(u.id))
               .map(c => ({
-                user_id: c.id,
-                username: c.username,
+                user_id: c.id, username: c.username,
                 full_name: c.full_name || c.username,
                 avatar_color: c.avatar_color || '#0d9488',
-                role: 'coach',
-                last_message: '',
-                last_time: ''
+                role: 'coach', last_message: '', last_time: ''
               }));
             allContacts = [...allContacts, ...coaches];
           } catch (e) { console.error('Failed to fetch coaches', e); }
         }
 
         setConversations(allContacts);
-      } catch (e) {
-        console.error('Failed to fetch conversations', e);
-      }
+      } catch (e) { console.error('Failed to fetch conversations', e); }
     };
     fetchAll();
   }, [user]);
+
+  // ── Heartbeat: update last_active every 30s ──
+  useEffect(() => {
+    if (!user) return;
+    const ping = () => axios.post(`${API_URL}/chat/heartbeat/${user.id}`).catch(() => {});
+    ping(); // initial
+    const interval = setInterval(ping, 30000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  // ── Poll online status for all contacts every 15s ──
+  useEffect(() => {
+    if (!user || conversations.length === 0) return;
+    const ids = conversations.map(c => c.user_id).join(',');
+    const fetchStatus = () => {
+      axios.get(`${API_URL}/chat/online-status?user_ids=${ids}`)
+        .then(res => setOnlineStatus(res.data))
+        .catch(() => {});
+    };
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 15000);
+    return () => clearInterval(interval);
+  }, [user, conversations]);
+
+  // ── Poll typing status for selected user every 2s ──
+  useEffect(() => {
+    if (!selectedUserId || !user) return;
+    setIsOtherTyping(false);
+    const poll = () => {
+      axios.get(`${API_URL}/chat/typing/${user.id}/${selectedUserId}`)
+        .then(res => setIsOtherTyping(res.data.is_typing))
+        .catch(() => {});
+    };
+    poll();
+    const interval = setInterval(poll, 2000);
+    return () => clearInterval(interval);
+  }, [selectedUserId, user]);
 
   // Fetch messages when selecting a user
   useEffect(() => {
@@ -101,9 +142,7 @@ const CoachChat = () => {
           if (res.data.length > 0 && prev.length > 0 && res.data[res.data.length - 1].id !== prev[prev.length - 1].id) {
             return res.data;
           }
-          if (res.data.length > 0 && prev.length === 0) {
-            return res.data;
-          }
+          if (res.data.length > 0 && prev.length === 0) return res.data;
           return prev;
         });
       } catch (e) { /* ignore poll errors */ }
@@ -120,14 +159,12 @@ const CoachChat = () => {
     }
   }, [messages]);
 
-  // Focus input when selecting a user
   useEffect(() => {
     if (selectedUserId) {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [selectedUserId]);
 
-  // Load older messages on scroll to top
   const handleScroll = useCallback(() => {
     const container = chatContainerRef.current;
     if (!container || !hasMore || loadingMore || messages.length === 0) return;
@@ -150,6 +187,20 @@ const CoachChat = () => {
     }
   }, [hasMore, loadingMore, messages, user, selectedUserId]);
 
+  // ── Send typing signal on input change ──
+  const handleInputChange = (e) => {
+    setInputMsg(e.target.value);
+    if (!selectedUserId || !user) return;
+    // Debounce: send typing signal at most once per 2s
+    if (typingTimeoutRef.current) return;
+    axios.post(`${API_URL}/chat/typing`, {
+      sender_id: user.id, receiver_id: selectedUserId
+    }).catch(() => {});
+    typingTimeoutRef.current = setTimeout(() => {
+      typingTimeoutRef.current = null;
+    }, 2000);
+  };
+
   const handleSend = async (e) => {
     e.preventDefault();
     if (!inputMsg.trim() || !selectedUserId || !user) return;
@@ -164,7 +215,6 @@ const CoachChat = () => {
     } catch (e) { console.error(e); }
     finally {
       setSending(false);
-      // Re-focus input after sending
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   };
@@ -186,18 +236,27 @@ const CoachChat = () => {
             </div>
           </div>
           <div className="flex-1 overflow-y-auto">
-            {conversations.map(c => (
-              <button key={c.user_id} onClick={() => setSelectedUserId(c.user_id)}
-                className={`w-full flex items-center space-x-3 p-3 hover:bg-slate-100 transition-colors text-left ${selectedUserId === c.user_id ? 'bg-primary-50 border-r-2 border-primary-500' : ''}`}>
-                <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style={{ backgroundColor: c.avatar_color || '#0d9488' }}>
-                  {(c.full_name || c.username)[0].toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-slate-800 text-sm truncate">{c.full_name || c.username}</p>
-                  <p className="text-xs text-slate-400 truncate">{c.last_message || 'No messages yet'}</p>
-                </div>
-              </button>
-            ))}
+            {conversations.map(c => {
+              const status = onlineStatus[String(c.user_id)];
+              const isOnline = status?.online === true;
+              const lastActiveText = isOnline ? 'Online' : timeAgo(status?.last_active);
+              return (
+                <button key={c.user_id} onClick={() => setSelectedUserId(c.user_id)}
+                  className={`w-full flex items-center space-x-3 p-3 hover:bg-slate-100 transition-colors text-left ${selectedUserId === c.user_id ? 'bg-primary-50 border-r-2 border-primary-500' : ''}`}>
+                  <div className="relative flex-shrink-0">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: c.avatar_color || '#0d9488' }}>
+                      {(c.full_name || c.username)[0].toUpperCase()}
+                    </div>
+                    {/* Online dot */}
+                    <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${isOnline ? 'bg-green-500' : 'bg-slate-300'}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-slate-800 text-sm truncate">{c.full_name || c.username}</p>
+                    <p className={`text-xs truncate ${isOnline ? 'text-green-500' : 'text-slate-400'}`}>{c.last_message || lastActiveText}</p>
+                  </div>
+                </button>
+              );
+            })}
             {conversations.length === 0 && <p className="text-slate-400 text-sm text-center py-8">No contacts found</p>}
           </div>
         </div>
@@ -213,10 +272,22 @@ const CoachChat = () => {
                 </button>
                 {selectedUser && (
                   <>
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: selectedUser.avatar_color || '#0d9488' }}>
-                      {(selectedUser.full_name || selectedUser.username)[0].toUpperCase()}
+                    <div className="relative">
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: selectedUser.avatar_color || '#0d9488' }}>
+                        {(selectedUser.full_name || selectedUser.username)[0].toUpperCase()}
+                      </div>
+                      <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white ${onlineStatus[String(selectedUserId)]?.online ? 'bg-green-500' : 'bg-slate-300'}`} />
                     </div>
-                    <p className="font-semibold text-slate-800">{selectedUser.full_name || selectedUser.username}</p>
+                    <div>
+                      <p className="font-semibold text-slate-800 leading-tight">{selectedUser.full_name || selectedUser.username}</p>
+                      <p className="text-xs text-slate-400">
+                        {isOtherTyping ? (
+                          <span className="text-primary-500 font-medium animate-pulse">typing...</span>
+                        ) : onlineStatus[String(selectedUserId)]?.online ? (
+                          <span className="text-green-500">Online</span>
+                        ) : timeAgo(onlineStatus[String(selectedUserId)]?.last_active)}
+                      </p>
+                    </div>
                   </>
                 )}
               </div>
@@ -245,12 +316,24 @@ const CoachChat = () => {
                     </span>
                   </div>
                 ))}
+                {/* Typing indicator bubble */}
+                {isOtherTyping && (
+                  <div className="flex flex-col items-start">
+                    <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-none px-4 py-3 shadow-sm">
+                      <div className="flex space-x-1">
+                        <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div ref={messagesEndRef} />
               </div>
 
               {/* Input */}
               <form onSubmit={handleSend} className="p-3 bg-white border-t border-slate-200 flex space-x-2">
-                <input ref={inputRef} type="text" value={inputMsg} onChange={e => setInputMsg(e.target.value)}
+                <input ref={inputRef} type="text" value={inputMsg} onChange={handleInputChange}
                   placeholder="Type a message..." disabled={sending} autoFocus
                   className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
                 <button type="submit" disabled={!inputMsg.trim() || sending}
