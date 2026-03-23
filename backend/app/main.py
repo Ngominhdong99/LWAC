@@ -9,13 +9,19 @@ from .routers import lessons, vocab, results, quiz, chat, auth, coach, upload, r
 models.Base.metadata.create_all(bind=engine)
 
 # ── Lightweight migrations for new columns on existing tables ──
-from sqlalchemy import text, inspect
-with engine.connect() as conn:
-    inspector = inspect(engine)
-    user_cols = [c["name"] for c in inspector.get_columns("users")]
-    if "last_active" not in user_cols:
-        conn.execute(text("ALTER TABLE users ADD COLUMN last_active DATETIME"))
-        conn.commit()
+from sqlalchemy import text, inspect as sa_inspect
+try:
+    with engine.connect() as conn:
+        insp = sa_inspect(engine)
+        if insp.has_table("users"):
+            user_cols = [c["name"] for c in insp.get_columns("users")]
+            if "last_active" not in user_cols:
+                # PostgreSQL uses TIMESTAMP, SQLite uses DATETIME
+                col_type = "TIMESTAMP" if "postgresql" in str(engine.url) else "DATETIME"
+                conn.execute(text(f"ALTER TABLE users ADD COLUMN last_active {col_type}"))
+                conn.commit()
+except Exception as e:
+    print(f"Migration note: {e}")
 
 app = FastAPI(title="LWAC API", description="API for Learn With Amateur Coach Platform")
 
