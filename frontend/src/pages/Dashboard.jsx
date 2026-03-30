@@ -52,7 +52,12 @@ const Dashboard = () => {
   const pct = total > 0 ? Math.round((completedCount / total) * 100) : 0;
 
   const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local timezone
-  const toLocalDate = (dateStr) => dateStr ? new Date(dateStr).toLocaleDateString('en-CA') : '';
+  // Server returns UTC dates without 'Z' suffix — append it so JS parses as UTC
+  const toLocalDate = (dateStr) => {
+    if (!dateStr) return '';
+    const utcStr = dateStr.endsWith('Z') ? dateStr : dateStr + 'Z';
+    return new Date(utcStr).toLocaleDateString('en-CA');
+  };
   const assignedToday = allAssignments.filter(a => toLocalDate(a.created_at) === today).length;
   const doneToday = completed.filter(a => toLocalDate(a.completed_at) === today).length;
 
