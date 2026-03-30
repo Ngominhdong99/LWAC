@@ -53,7 +53,7 @@ const Dashboard = () => {
 
   // Today stats
   const today = new Date().toISOString().slice(0, 10);
-  const assignedToday = allAssignments.filter(a => a.assigned_at && a.assigned_at.slice(0, 10) === today).length;
+  const assignedToday = allAssignments.filter(a => a.created_at && a.created_at.slice(0, 10) === today).length;
   const doneToday = completed.filter(a => a.completed_at && a.completed_at.slice(0, 10) === today).length;
 
   // Breakdown by type (completed)
