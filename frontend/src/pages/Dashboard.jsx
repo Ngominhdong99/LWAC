@@ -51,10 +51,10 @@ const Dashboard = () => {
   const pendingCount = pending.length;
   const pct = total > 0 ? Math.round((completedCount / total) * 100) : 0;
 
-  // Today stats
-  const today = new Date().toISOString().slice(0, 10);
-  const assignedToday = allAssignments.filter(a => a.created_at && a.created_at.slice(0, 10) === today).length;
-  const doneToday = completed.filter(a => a.completed_at && a.completed_at.slice(0, 10) === today).length;
+  const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local timezone
+  const toLocalDate = (dateStr) => dateStr ? new Date(dateStr).toLocaleDateString('en-CA') : '';
+  const assignedToday = allAssignments.filter(a => toLocalDate(a.created_at) === today).length;
+  const doneToday = completed.filter(a => toLocalDate(a.completed_at) === today).length;
 
   // Breakdown by type (completed)
   const typeBreakdown = {};
