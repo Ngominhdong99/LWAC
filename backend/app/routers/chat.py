@@ -48,6 +48,7 @@ class ChatMessageOut(BaseModel):
     receiver_id: int
     message: str
     context: Optional[str] = None
+    is_read: bool = False
     created_at: datetime
     class Config:
         orm_mode = True
@@ -144,6 +145,18 @@ def get_chat_history(
             m.is_read = True
     db.commit()
     return messages
+
+
+@router.post("/mark-read/{user_id}/{other_id}")
+def mark_messages_read(user_id: int, other_id: int, db: Session = Depends(get_db)):
+    """Mark all messages from other_id to user_id as read."""
+    db.query(models.ChatMessage).filter(
+        models.ChatMessage.sender_id == other_id,
+        models.ChatMessage.receiver_id == user_id,
+        models.ChatMessage.is_read == False
+    ).update({"is_read": True})
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/unread/{user_id}")

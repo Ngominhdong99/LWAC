@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
-import { Send, ArrowLeft, Users, Loader2 } from 'lucide-react';
+import { Send, ArrowLeft, Users, Loader2, Check, CheckCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import API_URL from '../api';
 
@@ -17,6 +17,14 @@ const timeAgo = (isoString) => {
   if (diff < 86400) return `Active ${Math.floor(diff / 3600)}h ago`;
   if (diff < 172800) return 'Active yesterday';
   return `Active ${Math.floor(diff / 86400)}d ago`;
+};
+
+// Format UTC timestamp to local time
+const formatTime = (utcString) => {
+  if (!utcString) return '';
+  // Ensure UTC interpretation: append Z if not present
+  const ts = utcString.endsWith('Z') ? utcString : utcString + 'Z';
+  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
 const CoachChat = () => {
@@ -40,54 +48,52 @@ const CoachChat = () => {
   const typingTimeoutRef = useRef(null);
 
   // Fetch conversations list + merge all contacts
-  useEffect(() => {
+  const fetchConversations = useCallback(async () => {
     if (!user) return;
-    const fetchAll = async () => {
-      try {
-        const convRes = await axios.get(`${API_URL}/chat/conversations/${user.id}`);
-        const existingConvos = convRes.data;
-        const existingIds = new Set(existingConvos.map(c => c.user_id));
-        let allContacts = [...existingConvos];
+    try {
+      const convRes = await axios.get(`${API_URL}/chat/conversations/${user.id}`);
+      const existingConvos = convRes.data;
+      const existingIds = new Set(existingConvos.map(c => c.user_id));
+      let allContacts = [...existingConvos];
 
-        if (user.role === 'coach') {
-          try {
-            const studentsRes = await axios.get(`${API_URL}/coach/students`);
-            const newStudents = studentsRes.data
-              .filter(s => !existingIds.has(s.id))
-              .map(s => ({
-                user_id: s.id, username: s.username,
-                full_name: s.full_name || s.username,
-                avatar_color: s.avatar_color || '#0d9488',
-                role: 'student', last_message: '', last_time: ''
-              }));
-            allContacts = [...allContacts, ...newStudents];
-          } catch (e) { console.error('Failed to fetch students', e); }
-        } else {
-          try {
-            const usersRes = await axios.get(`${API_URL}/auth/users`);
-            const coaches = usersRes.data
-              .filter(u => u.role === 'coach' && !existingIds.has(u.id))
-              .map(c => ({
-                user_id: c.id, username: c.username,
-                full_name: c.full_name || c.username,
-                avatar_color: c.avatar_color || '#0d9488',
-                role: 'coach', last_message: '', last_time: ''
-              }));
-            allContacts = [...allContacts, ...coaches];
-          } catch (e) { console.error('Failed to fetch coaches', e); }
-        }
-
-        setConversations(allContacts);
-      } catch (e) { console.error('Failed to fetch conversations', e); }
-    };
-    fetchAll();
+      if (user.role === 'coach') {
+        try {
+          const studentsRes = await axios.get(`${API_URL}/coach/students`);
+          const newStudents = studentsRes.data
+            .filter(s => !existingIds.has(s.id))
+            .map(s => ({
+              user_id: s.id, username: s.username,
+              full_name: s.full_name || s.username,
+              avatar_color: s.avatar_color || '#0d9488',
+              role: 'student', last_message: '', last_time: ''
+            }));
+          allContacts = [...allContacts, ...newStudents];
+        } catch (e) { console.error('Failed to fetch students', e); }
+      } else {
+        try {
+          const usersRes = await axios.get(`${API_URL}/auth/users`);
+          const coaches = usersRes.data
+            .filter(u => u.role === 'coach' && !existingIds.has(u.id))
+            .map(c => ({
+              user_id: c.id, username: c.username,
+              full_name: c.full_name || c.username,
+              avatar_color: c.avatar_color || '#0d9488',
+              role: 'coach', last_message: '', last_time: ''
+            }));
+          allContacts = [...allContacts, ...coaches];
+        } catch (e) { console.error('Failed to fetch coaches', e); }
+      }
+      setConversations(allContacts);
+    } catch (e) { console.error('Failed to fetch conversations', e); }
   }, [user]);
+
+  useEffect(() => { fetchConversations(); }, [fetchConversations]);
 
   // ── Heartbeat: update last_active every 30s ──
   useEffect(() => {
     if (!user) return;
     const ping = () => axios.post(`${API_URL}/chat/heartbeat/${user.id}`).catch(() => {});
-    ping(); // initial
+    ping();
     const interval = setInterval(ping, 30000);
     return () => clearInterval(interval);
   }, [user]);
@@ -120,6 +126,12 @@ const CoachChat = () => {
     return () => clearInterval(interval);
   }, [selectedUserId, user]);
 
+  // ── Mark messages as read when viewing a conversation ──
+  useEffect(() => {
+    if (!selectedUserId || !user) return;
+    axios.post(`${API_URL}/chat/mark-read/${user.id}/${selectedUserId}`).catch(() => {});
+  }, [selectedUserId, user, messages]);
+
   // Fetch messages when selecting a user
   useEffect(() => {
     if (!selectedUserId || !user) return;
@@ -141,6 +153,12 @@ const CoachChat = () => {
         setMessages(prev => {
           if (res.data.length > 0 && prev.length > 0 && res.data[res.data.length - 1].id !== prev[prev.length - 1].id) {
             return res.data;
+          }
+          // Also update if is_read status changed (for sent status ticks)
+          if (res.data.length > 0 && prev.length > 0) {
+            const lastNew = res.data[res.data.length - 1];
+            const lastOld = prev[prev.length - 1];
+            if (lastNew.is_read !== lastOld.is_read) return res.data;
           }
           if (res.data.length > 0 && prev.length === 0) return res.data;
           return prev;
@@ -191,7 +209,6 @@ const CoachChat = () => {
   const handleInputChange = (e) => {
     setInputMsg(e.target.value);
     if (!selectedUserId || !user) return;
-    // Debounce: send typing signal at most once per 2s
     if (typingTimeoutRef.current) return;
     axios.post(`${API_URL}/chat/typing`, {
       sender_id: user.id, receiver_id: selectedUserId
@@ -210,13 +227,26 @@ const CoachChat = () => {
         sender_id: user.id, receiver_id: selectedUserId, message: inputMsg
       });
       setInputMsg('');
-      const res = await axios.get(`${API_URL}/chat/history/${user.id}/${selectedUserId}?limit=30`);
-      setMessages(res.data);
+      // Refresh messages AND conversation list (for last_message update)
+      const [msgRes] = await Promise.all([
+        axios.get(`${API_URL}/chat/history/${user.id}/${selectedUserId}?limit=30`),
+        fetchConversations(),
+      ]);
+      setMessages(msgRes.data);
     } catch (e) { console.error(e); }
     finally {
       setSending(false);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
+  };
+
+  // Message status icon
+  const MessageStatus = ({ msg }) => {
+    if (msg.sender_id !== user.id) return null; // only show for sent messages
+    if (msg.is_read) {
+      return <CheckCheck size={14} className="text-blue-500" />;
+    }
+    return <Check size={14} className="text-slate-400" />;
   };
 
   return (
@@ -247,7 +277,6 @@ const CoachChat = () => {
                     <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: c.avatar_color || '#0d9488' }}>
                       {(c.full_name || c.username)[0].toUpperCase()}
                     </div>
-                    {/* Online dot */}
                     <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${isOnline ? 'bg-green-500' : 'bg-slate-300'}`} />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -311,9 +340,12 @@ const CoachChat = () => {
                     }`}>
                       <p className="leading-relaxed">{msg.message}</p>
                     </div>
-                    <span className="text-xs text-slate-400 mt-1 px-1">
-                      {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
+                    <div className="flex items-center space-x-1 mt-1 px-1">
+                      <span className="text-xs text-slate-400">
+                        {formatTime(msg.created_at)}
+                      </span>
+                      <MessageStatus msg={msg} />
+                    </div>
                   </div>
                 ))}
                 {/* Typing indicator bubble */}

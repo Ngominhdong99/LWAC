@@ -4,7 +4,18 @@ Tries multiple models as fallback: gemini-2.5-flash-lite -> gemini-2.0-flash-lit
 """
 import os
 import time
-from google import genai
+import traceback
+
+try:
+    from google import genai
+    GENAI_AVAILABLE = True
+except ImportError:
+    GENAI_AVAILABLE = False
+    print("[Chat] google-genai not installed — AI chat will use mock mode")
+except Exception as e:
+    GENAI_AVAILABLE = False
+    print(f"[Chat] Failed to import google-genai: {e}")
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -62,9 +73,11 @@ def chat_with_assistant(session_id: str, user_message: str) -> str:
     if len(_conversations[session_id]) > 20:
         _conversations[session_id] = _conversations[session_id][-20:]
 
-    if not api_key:
+    if not api_key or not GENAI_AVAILABLE:
         response = _get_mock_response(user_message)
         _conversations[session_id].append({"role": "model", "parts": [{"text": response}]})
+        if not GENAI_AVAILABLE:
+            response = "⚠️ [AI service unavailable, using demo mode]\n\n" + response
         return response
 
     # Try each model until one works
