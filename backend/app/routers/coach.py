@@ -304,3 +304,60 @@ def answer_question(question_id: int, req: AnswerRequest, db: Session = Depends(
     tq.answered_at = datetime.utcnow()
     db.commit()
     return {"message": "Question answered", "id": tq.id}
+
+
+# ── AI Explanation for Coach ─────────────────────────────────────
+class AIExplainRequest(BaseModel):
+    passage: str
+    question_text: str
+    options: Optional[dict] = None
+    correct_answer: str
+
+
+@router.post("/ai-explain")
+def ai_explain_question(req: AIExplainRequest):
+    """Use Gemini to explain why the correct answer is correct for a reading question."""
+    import os
+    try:
+        from google import genai
+    except ImportError:
+        return {"explanation": "AI service not available (google-genai not installed)"}
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return {"explanation": "Gemini API key not configured."}
+
+    options_text = ""
+    if req.options:
+        options_text = "\n".join([f"{k}: {v}" for k, v in req.options.items()])
+
+    prompt = f"""You are an expert IELTS Reading instructor helping a coach understand a question.
+
+Reading Passage:
+{req.passage[:3000]}
+
+Question: {req.question_text}
+{f"Options:\n{options_text}" if options_text else ""}
+Correct Answer: {req.correct_answer}
+
+Please explain in a clear, concise way:
+1. WHY the correct answer is "{req.correct_answer}" — reference the specific part of the passage that supports this.
+2. If there are options, briefly explain why each wrong option is incorrect.
+3. Provide a teaching tip for how to explain this to a student.
+
+Write in English with a friendly, professional tone. Keep it under 300 words."""
+
+    try:
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[{"role": "user", "parts": [{"text": prompt}]}],
+            config=genai.types.GenerateContentConfig(
+                temperature=0.4,
+                max_output_tokens=600,
+            ),
+        )
+        return {"explanation": response.text}
+    except Exception as e:
+        print(f"[AI Explain] Error: {e}")
+        return {"explanation": f"AI explanation failed: {str(e)[:200]}"}

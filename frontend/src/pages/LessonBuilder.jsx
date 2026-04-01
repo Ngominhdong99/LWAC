@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, Trash2, Save, X, FileText, Headphones, Edit3, Mic } from 'lucide-react';
+import { Plus, Trash2, Save, X, FileText, Headphones, Edit3, Mic, Image, Video } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useParams, useNavigate } from 'react-router-dom';
 import API_URL from '../api';
@@ -19,8 +19,12 @@ const LessonBuilder = () => {
   // Reading / General Content
   const [passageText, setPassageText] = useState('');
   
-  // Listening
+  // Media uploads
   const [audioFile, setAudioFile] = useState(null);
+  const [imageFile, setImageFile] = useState(null);
+  const [videoFile, setVideoFile] = useState(null);
+  const [existingImageUrl, setExistingImageUrl] = useState('');
+  const [existingVideoUrl, setExistingVideoUrl] = useState('');
   
   // Writing
   const [task1Min, setTask1Min] = useState(150);
@@ -45,6 +49,8 @@ const LessonBuilder = () => {
         
         if (data.type === 'reading' || data.type === 'listening') {
           setPassageText(data.content?.passage || '');
+          setExistingImageUrl(data.content?.image_url || '');
+          setExistingVideoUrl(data.content?.video_url || '');
           if (data.questions) setQuestions(data.questions);
         } else if (data.type === 'writing') {
           setPassageText(data.content?.prompt || '');
@@ -93,18 +99,18 @@ const LessonBuilder = () => {
     setQuestions(questions.filter(q => q.id !== id));
   };
 
-  const handleAudioUpload = async () => {
-    if (!audioFile) return null;
+  const handleMediaUpload = async (file, type) => {
+    if (!file) return null;
     const formData = new FormData();
-    formData.append('file', audioFile);
+    formData.append('file', file);
     try {
-      const res = await axios.post(`${API_URL}/upload/audio`, formData, {
+      const res = await axios.post(`${API_URL}/upload/${type}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       return res.data.url;
     } catch (e) {
       console.error(e);
-      alert('Failed to upload audio');
+      alert(`Failed to upload ${type}`);
       return null;
     }
   };
@@ -119,13 +125,27 @@ const LessonBuilder = () => {
     try {
       let media_url = null;
       if (lessonType === 'listening' && audioFile) {
-        media_url = await handleAudioUpload();
+        media_url = await handleMediaUpload(audioFile, 'audio');
+      }
+
+      // Upload image if selected
+      let image_url = existingImageUrl || null;
+      if (imageFile) {
+        image_url = await handleMediaUpload(imageFile, 'image');
+      }
+
+      // Upload video if selected (listening only)
+      let video_url = existingVideoUrl || null;
+      if (videoFile && lessonType === 'listening') {
+        video_url = await handleMediaUpload(videoFile, 'video');
       }
 
       // Build specific content payload based on type
       let content = {};
-      if (lessonType === 'reading' || lessonType === 'listening') {
-         content = { passage: passageText };
+      if (lessonType === 'reading') {
+         content = { passage: passageText, image_url };
+      } else if (lessonType === 'listening') {
+         content = { passage: passageText, image_url, video_url };
       } else if (lessonType === 'writing') {
          content = { 
              prompt: passageText,
@@ -252,16 +272,54 @@ const LessonBuilder = () => {
         {/* Dynamic Builder Core */}
         <hr className="border-slate-100" />
         
-        {lessonType === 'listening' && (
+        {/* Image Upload (Reading + Listening) */}
+        {(lessonType === 'reading' || lessonType === 'listening') && (
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">Audio Upload</label>
+            <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center space-x-2">
+              <Image size={16} /> <span>Image Upload</span>
+            </label>
             <input 
               type="file" 
-              accept="audio/*"
-              onChange={(e) => setAudioFile(e.target.files[0])}
-              className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+              accept="image/*"
+              onChange={(e) => setImageFile(e.target.files[0])}
+              className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
             />
-            {audioFile && <p className="text-xs text-slate-500 mt-2">Selected: {audioFile.name}</p>}
+            {imageFile && <p className="text-xs text-slate-500 mt-2">New: {imageFile.name}</p>}
+            {!imageFile && existingImageUrl && (
+              <div className="mt-2">
+                <p className="text-xs text-green-600 mb-1">✅ Current image:</p>
+                <img src={`${API_URL}${existingImageUrl}`} alt="lesson" className="max-h-32 rounded-lg border" />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Listening: Audio + Video */}
+        {lessonType === 'listening' && (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Audio Upload</label>
+              <input 
+                type="file" 
+                accept="audio/*"
+                onChange={(e) => setAudioFile(e.target.files[0])}
+                className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+              />
+              {audioFile && <p className="text-xs text-slate-500 mt-2">Selected: {audioFile.name}</p>}
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center space-x-2">
+                <Video size={16} /> <span>Video Upload (optional)</span>
+              </label>
+              <input 
+                type="file" 
+                accept="video/*"
+                onChange={(e) => setVideoFile(e.target.files[0])}
+                className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100"
+              />
+              {videoFile && <p className="text-xs text-slate-500 mt-2">Selected: {videoFile.name}</p>}
+              {!videoFile && existingVideoUrl && <p className="text-xs text-green-600 mt-2">✅ Existing video attached</p>}
+            </div>
           </div>
         )}
 

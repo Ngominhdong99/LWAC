@@ -305,6 +305,15 @@ const ReadingTest = () => {
         <section className="flex-1 md:w-1/2 p-4 md:p-8 bg-white md:border-r border-slate-200 shadow-sm relative overflow-y-auto">
           <div className="max-w-prose mx-auto" ref={textRef}>
             <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-6 leading-tight select-text">{lesson.title}</h2>
+            {lesson.content?.image_url && (
+              <div className="mb-6">
+                <img 
+                  src={`${API_URL}${lesson.content.image_url}`} 
+                  alt={lesson.title} 
+                  className="w-full rounded-xl shadow-md border border-slate-200"
+                />
+              </div>
+            )}
             <div className="space-y-6 text-slate-700 text-base md:text-lg leading-relaxed font-serif selection:bg-primary-200 selection:text-primary-900">
               {lesson.content.paragraphs && lesson.content.paragraphs.map(p => (
                 <p key={p.id} className="text-justify select-text">{p.text}</p>

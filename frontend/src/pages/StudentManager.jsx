@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Users, Plus, Trash2, Edit3, X, Eye, ChevronDown, RefreshCw, Save } from 'lucide-react';
+import { Users, Plus, Trash2, Edit3, X, Eye, ChevronDown, RefreshCw, Save, Sparkles, Loader2 } from 'lucide-react';
 import API_URL from '../api';
 
 const StudentManager = () => {
@@ -15,6 +15,7 @@ const StudentManager = () => {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assigningStudentId, setAssigningStudentId] = useState(null);
   const [viewingResult, setViewingResult] = useState(null);
+  const [aiExplain, setAiExplain] = useState({}); // { [questionId]: { loading, text } }
   
   // Writing feedback state
   const [selectedText, setSelectedText] = useState('');
@@ -634,6 +635,48 @@ const StudentManager = () => {
                             )}
                           </div>
                         )}
+
+                        {/* AI Explain Button */}
+                        <div className="pt-3 border-t border-slate-100 mt-3">
+                          {aiExplain[q.id]?.text ? (
+                            <div className="bg-violet-50 border border-violet-200 rounded-xl p-4">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <Sparkles size={14} className="text-violet-600" />
+                                <span className="font-bold text-violet-700 text-xs uppercase tracking-wider">AI Explanation</span>
+                              </div>
+                              <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap">{aiExplain[q.id].text}</p>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={async () => {
+                                setAiExplain(prev => ({ ...prev, [q.id]: { loading: true } }));
+                                try {
+                                  const content = viewingResult.lesson.content;
+                                  const passage = content?.paragraphs
+                                    ? content.paragraphs.map(p => p.text).join('\n\n')
+                                    : content?.passage || '';
+                                  const res = await axios.post(`${API_URL}/coach/ai-explain`, {
+                                    passage,
+                                    question_text: q.question_text,
+                                    options: q.options || null,
+                                    correct_answer: q.correct_answer
+                                  });
+                                  setAiExplain(prev => ({ ...prev, [q.id]: { text: res.data.explanation } }));
+                                } catch (e) {
+                                  setAiExplain(prev => ({ ...prev, [q.id]: { text: 'Failed to get AI explanation.' } }));
+                                }
+                              }}
+                              disabled={aiExplain[q.id]?.loading}
+                              className="flex items-center space-x-2 text-xs font-semibold text-violet-600 hover:text-violet-800 bg-violet-50 hover:bg-violet-100 px-3 py-2 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              {aiExplain[q.id]?.loading ? (
+                                <><Loader2 size={14} className="animate-spin" /><span>Analyzing...</span></>
+                              ) : (
+                                <><Sparkles size={14} /><span>AI Explain</span></>
+                              )}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );

@@ -307,6 +307,30 @@ const ListeningTest = () => {
               </div>
             </div>
 
+            {/* Video Player (if provided) */}
+            {lesson.content?.video_url && (
+              <div className="bg-slate-900 rounded-2xl overflow-hidden mb-6 border border-slate-700">
+                <video 
+                  controls
+                  className="w-full"
+                  src={`${API_URL}${lesson.content.video_url}`}
+                >
+                  Your browser does not support the video tag.
+                </video>
+              </div>
+            )}
+
+            {/* Image (if provided) */}
+            {lesson.content?.image_url && (
+              <div className="mb-6">
+                <img 
+                  src={`${API_URL}${lesson.content.image_url}`} 
+                  alt={lesson.title} 
+                  className="w-full rounded-xl shadow-md border border-slate-200"
+                />
+              </div>
+            )}
+
             {/* Transcript (shown after submit) */}
             {showTranscript && lesson.content.transcript && (
               <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200">
