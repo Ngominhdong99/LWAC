@@ -331,13 +331,15 @@ def ai_explain_question(req: AIExplainRequest):
     if req.options:
         options_text = "\n".join([f"{k}: {v}" for k, v in req.options.items()])
 
+    options_section = f"Options:\n{options_text}" if options_text else ""
+
     prompt = f"""You are an expert IELTS Reading instructor helping a coach understand a question.
 
 Reading Passage:
 {req.passage[:3000]}
 
 Question: {req.question_text}
-{f"Options:\n{options_text}" if options_text else ""}
+{options_section}
 Correct Answer: {req.correct_answer}
 
 Please explain in a clear, concise way:
