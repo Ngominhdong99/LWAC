@@ -19,6 +19,7 @@ import SpeakingTest from './pages/SpeakingTest';
 import LessonManager from './pages/LessonManager';
 import StudentReward from './pages/StudentReward';
 import CoachReward from './pages/CoachReward';
+import { ToastProvider } from './components/Toast';
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, loading } = useAuth();
@@ -67,9 +68,11 @@ function AppRoutes() {
 function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </ToastProvider>
     </BrowserRouter>
   );
 }

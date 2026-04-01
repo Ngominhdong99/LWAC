@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../components/Toast';
 import AskTeacherPopup from '../components/AskTeacherPopup';
 import { ArrowLeft, ArrowRight, Clock, CheckCircle, PenTool, Loader2, Volume2, Plus, HelpCircle, Check } from 'lucide-react';
 import API_URL from '../api';
@@ -14,6 +15,7 @@ const WritingTest = () => {
   const [searchParams] = useSearchParams();
   const isViewMode = searchParams.get('view') === 'true';
   const { user } = useAuth();
+  const toast = useToast();
   const [essay, setEssay] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState(null);
@@ -171,7 +173,7 @@ const WritingTest = () => {
       localStorage.removeItem(storageKey);
     } catch (error) {
       console.error("Submission failed:", error);
-      alert("Failed to submit essay. Please try again.");
+      toast.error('Failed to submit essay. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

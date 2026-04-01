@@ -4,6 +4,7 @@ import axios from 'axios';
 import AskTeacherPopup from '../components/AskTeacherPopup';
 import { ArrowLeft, ArrowRight, Clock, CheckCircle, Plus, HelpCircle, Volume2, Check } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../components/Toast';
 import API_URL from '../api';
 import { speakNatural } from '../utils/tts';
 import { lookupWord } from '../utils/dictionary';
@@ -38,7 +39,9 @@ const ReadingTest = () => {
   const [fillAnswers, setFillAnswers] = useState({});
   const [result, setResult] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [coachFeedback, setCoachFeedback] = useState(null);
   const textRef = useRef(null);
+  const toast = useToast();
 
   // Text selection state
   const [selection, setSelection] = useState(null);
@@ -92,16 +95,57 @@ const ReadingTest = () => {
               setResult({ score: latest.score, correct: correctCount, total: questions.length });
             }
           } catch (e) { console.error('Failed to load result for view mode', e); }
-        } else if (!isViewMode) {
-          // Restore from localStorage
+        } else if (!isViewMode && user) {
+          // Check if already submitted (prevents re-submit on F5)
           try {
-            const saved = localStorage.getItem(`lwac_reading_${user?.id}_${id}`);
-            if (saved) {
-              const parsed = JSON.parse(saved);
-              if (parsed.answers) setAnswers(parsed.answers);
-              if (parsed.fillAnswers) setFillAnswers(parsed.fillAnswers);
+            const resResults = await axios.get(`${API_URL}/results/${user.id}`);
+            const lessonResults = resResults.data.filter(r => r.lesson_id === parseInt(id));
+            if (lessonResults.length > 0) {
+              const latest = lessonResults[lessonResults.length - 1];
+              const questions = lessonRes.data.questions || [];
+              const savedMc = {};
+              const savedFb = {};
+              if (latest.responses) {
+                questions.forEach(q => {
+                  const val = latest.responses[String(q.id)];
+                  if (val !== undefined) {
+                    if (q.type === 'multiple_choice') savedMc[q.id] = val;
+                    else if (q.type === 'fill_blank') savedFb[q.id] = val;
+                  }
+                });
+              }
+              setAnswers(savedMc);
+              setFillAnswers(savedFb);
+              const correctCount = questions.reduce((acc, q) => {
+                if (q.type === 'multiple_choice' && savedMc[q.id] === q.correct_answer) return acc + 1;
+                if (q.type === 'fill_blank' && (savedFb[q.id] || '').trim().toLowerCase() === q.correct_answer.toLowerCase()) return acc + 1;
+                return acc;
+              }, 0);
+              setResult({ score: latest.score, correct: correctCount, total: questions.length });
+              setCoachFeedback(latest.responses?.coach_notes || null);
+              localStorage.removeItem(`lwac_reading_${user?.id}_${id}`);
+            } else {
+              // Restore from localStorage only if not yet submitted
+              try {
+                const saved = localStorage.getItem(`lwac_reading_${user?.id}_${id}`);
+                if (saved) {
+                  const parsed = JSON.parse(saved);
+                  if (parsed.answers) setAnswers(parsed.answers);
+                  if (parsed.fillAnswers) setFillAnswers(parsed.fillAnswers);
+                }
+              } catch (e) { /* ignore */ }
             }
-          } catch (e) { /* ignore */ }
+          } catch (e) {
+            // If result check fails, fall back to localStorage
+            try {
+              const saved = localStorage.getItem(`lwac_reading_${user?.id}_${id}`);
+              if (saved) {
+                const parsed = JSON.parse(saved);
+                if (parsed.answers) setAnswers(parsed.answers);
+                if (parsed.fillAnswers) setFillAnswers(parsed.fillAnswers);
+              }
+            } catch (e2) { /* ignore */ }
+          }
         }
       } catch (error) {
         console.error("Failed to load lesson", error);
@@ -203,7 +247,7 @@ const ReadingTest = () => {
 
     const totalAnswered = Object.keys(answers).length + Object.keys(fillAnswers).length;
     if (totalAnswered < lesson.questions.length) {
-      alert("Please answer all questions before submitting.");
+      toast.warning('Please answer all questions before submitting.');
       return;
     }
 
@@ -228,11 +272,12 @@ const ReadingTest = () => {
         responses: { ...answers, ...fillAnswers }
       });
       setResult({ score: normalizedScore, correct: score, total: lesson.questions.length });
+      toast.success(`You scored ${normalizedScore}% (${score}/${lesson.questions.length})`, 'Test Submitted!');
       // Clear auto-saved data after successful submission
       localStorage.removeItem(storageKey);
     } catch (error) {
       console.error("Failed to submit results", error);
-      alert("Error saving results to server.");
+      toast.error('Error saving results to server.');
     } finally {
       setIsSubmitting(false);
     }
@@ -466,6 +511,16 @@ const ReadingTest = () => {
                   )}
                 </div>
               </div>
+
+              {/* Coach note for this question */}
+              {coachFeedback?.[String(q.id)] && (
+                <div className="pl-9 mt-3">
+                  <div className="bg-primary-50 border border-primary-200 rounded-xl p-4">
+                    <p className="text-xs font-bold text-primary-700 uppercase tracking-wider mb-1">💬 Coach's Note</p>
+                    <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{coachFeedback[String(q.id)]}</p>
+                  </div>
+                </div>
+              )}
             </div>
           ) : !isViewMode && (
             <div className="fixed md:absolute bottom-16 md:bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-slate-200 flex justify-end z-10">

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Users, Plus, Trash2, Edit3, X, Eye, ChevronDown, RefreshCw, Save, Sparkles, Loader2, Send, MessageSquare } from 'lucide-react';
+import { useToast } from '../components/Toast';
 import API_URL from '../api';
 
 const StudentManager = () => {
@@ -23,6 +24,7 @@ const StudentManager = () => {
   const [generalComment, setGeneralComment] = useState('');
   const [scoreInput, setScoreInput] = useState('');
   const [coachNotes, setCoachNotes] = useState({}); // { [questionId]: string }
+  const toast = useToast();
 
   const fetchStudents = async () => {
     try {
@@ -57,7 +59,7 @@ const StudentManager = () => {
       setForm({ username: '', password: '', email: '', full_name: '' });
       fetchStudents();
     } catch (e) {
-      alert(e.response?.data?.detail || 'Error saving student');
+      toast.error(e.response?.data?.detail || 'Error saving student');
     }
   };
 
@@ -66,7 +68,7 @@ const StudentManager = () => {
     try {
       await axios.delete(`${API_URL}/coach/students/${id}`);
       fetchStudents();
-    } catch (e) { alert('Error deleting student'); }
+    } catch (e) { toast.error('Error deleting student'); }
   };
 
   const handleEdit = (s) => {
@@ -95,7 +97,7 @@ const StudentManager = () => {
     try {
       await axios.post(`${API_URL}/coach/students/${assigningStudentId}/assignments`, { lesson_id: lessonId });
       refreshAssignments(assigningStudentId); // refresh assignments without collapsing
-    } catch (e) { alert('Error assigning test'); }
+    } catch (e) { toast.error('Error assigning test'); }
   };
 
   const handleDeleteAssignment = async (assignmentId) => {
@@ -103,20 +105,20 @@ const StudentManager = () => {
     try {
       await axios.delete(`${API_URL}/coach/assignments/${assignmentId}`);
       refreshAssignments(expandedId);
-    } catch (e) { alert('Error removing assignment'); }
+    } catch (e) { toast.error('Error removing assignment'); }
   };
 
   const handleToggleRetake = async (assignmentId) => {
     try {
       await axios.put(`${API_URL}/coach/assignments/${assignmentId}/toggle-retake`);
       refreshAssignments(expandedId);
-    } catch (e) { alert('Error toggling retake'); }
+    } catch (e) { toast.error('Error toggling retake'); }
   };
 
   const handleViewDetails = async (assignment) => {
     try {
       if (!assignment.result_id) {
-        alert("This test has no valid result ID linked.");
+        toast.warning('This test has no valid result ID linked.');
         return;
       }
       const [lessonRes, resultRes] = await Promise.all([
@@ -135,7 +137,7 @@ const StudentManager = () => {
       setAiExplain({});
       setGeneralComment('');
     } catch (e) {
-      alert('Error fetching detailed result');
+      toast.error('Error fetching detailed result');
       console.error(e);
     }
   };
@@ -175,7 +177,7 @@ const StudentManager = () => {
       setSelectedText('');
       setFeedbackComment('');
     } catch (e) {
-      alert("Failed to save feedback.");
+      toast.error('Failed to save feedback.');
       console.error(e);
     }
   };
@@ -540,7 +542,7 @@ const StudentManager = () => {
                                 setSelectedText('');
                                 setFeedbackComment('');
                               } catch (e) {
-                                alert('Failed to save comment.');
+                                toast.error('Failed to save comment.');
                               }
                             };
                             doSave();
@@ -764,9 +766,9 @@ const StudentManager = () => {
                                       }
                                     });
                                     setViewingResult(prev => ({ ...prev, result: res.data }));
-                                    alert('Note saved!');
+                                    toast.success('Note saved!');
                                   } catch (e) {
-                                    alert('Failed to save note.');
+                                    toast.error('Failed to save note.');
                                   }
                                 }}
                                 className="self-end bg-primary-600 hover:bg-primary-700 text-white p-2 rounded-lg transition-colors"

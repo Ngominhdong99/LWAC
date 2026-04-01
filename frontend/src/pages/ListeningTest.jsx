@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../components/Toast';
 import { ArrowLeft, ArrowRight, Play, Pause, RotateCcw, CheckCircle, Headphones, Volume2 } from 'lucide-react';
 import API_URL from '../api';
 import { speakNatural, cancelSpeech } from '../utils/tts';
@@ -24,8 +25,10 @@ const ListeningTest = () => {
   const [showTranscript, setShowTranscript] = useState(false);
   const audioRef = useRef(null);
   const [audioSrc, setAudioSrc] = useState(null);
+  const [coachFeedback, setCoachFeedback] = useState(null);
+  const toast = useToast();
 
-  const storageKey = `lwac_listening_${user?.id}_${id}`;
+  const playCountKey = `lwac_listening_plays_${user?.id}_${id}`;
 
   useEffect(() => {
     setLesson(null);
@@ -75,16 +78,62 @@ const ListeningTest = () => {
               setShowTranscript(true);
             }
           } catch (e) { console.error('Failed to load result for view mode', e); }
-        } else if (!isViewMode) {
-          // Restore from localStorage
+        } else if (!isViewMode && user) {
+          // Restore play count from localStorage
           try {
-            const saved = localStorage.getItem(storageKey);
-            if (saved) {
-              const parsed = JSON.parse(saved);
-              if (parsed.answers) setAnswers(parsed.answers);
-              if (parsed.fillAnswers) setFillAnswers(parsed.fillAnswers);
-            }
+            const savedPlays = localStorage.getItem(playCountKey);
+            if (savedPlays) setPlayCount(parseInt(savedPlays) || 0);
           } catch (e) { /* ignore */ }
+
+          // Check if already submitted (prevents re-submit on F5)
+          try {
+            const resResults = await axios.get(`${API_URL}/results/${user.id}`);
+            const lessonResults = resResults.data.filter(r => r.lesson_id === parseInt(id));
+            if (lessonResults.length > 0) {
+              const latest = lessonResults[lessonResults.length - 1];
+              const questions = lessonRes.data.questions || [];
+              const savedMc = {};
+              const savedFb = {};
+              if (latest.responses) {
+                questions.forEach(q => {
+                  const val = latest.responses[String(q.id)];
+                  if (val !== undefined) {
+                    if (q.type === 'multiple_choice') savedMc[q.id] = val;
+                    else if (q.type === 'fill_blank') savedFb[q.id] = val;
+                  }
+                });
+              }
+              setAnswers(savedMc);
+              setFillAnswers(savedFb);
+              const correctCount = questions.reduce((acc, q) => {
+                if (q.type === 'multiple_choice' && savedMc[q.id] === q.correct_answer) return acc + 1;
+                if (q.type === 'fill_blank' && (savedFb[q.id] || '').trim().toLowerCase() === q.correct_answer.toLowerCase()) return acc + 1;
+                return acc;
+              }, 0);
+              setResult({ score: latest.score, correct: correctCount, total: questions.length });
+              setCoachFeedback(latest.responses?.coach_notes || null);
+              setShowTranscript(true);
+            } else {
+              // Restore answers from localStorage only if not yet submitted
+              try {
+                const saved = localStorage.getItem(`lwac_listening_${user?.id}_${id}`);
+                if (saved) {
+                  const parsed = JSON.parse(saved);
+                  if (parsed.answers) setAnswers(parsed.answers);
+                  if (parsed.fillAnswers) setFillAnswers(parsed.fillAnswers);
+                }
+              } catch (e) { /* ignore */ }
+            }
+          } catch (e) {
+            try {
+              const saved = localStorage.getItem(`lwac_listening_${user?.id}_${id}`);
+              if (saved) {
+                const parsed = JSON.parse(saved);
+                if (parsed.answers) setAnswers(parsed.answers);
+                if (parsed.fillAnswers) setFillAnswers(parsed.fillAnswers);
+              }
+            } catch (e2) { /* ignore */ }
+          }
         }
       } catch (error) {
         console.error("Failed to load lesson", error);
@@ -107,9 +156,16 @@ const ListeningTest = () => {
     if (isViewMode || result) return;
     const hasAnswers = Object.keys(answers).length > 0 || Object.keys(fillAnswers).length > 0;
     if (hasAnswers) {
-      localStorage.setItem(storageKey, JSON.stringify({ answers, fillAnswers }));
+      localStorage.setItem(`lwac_listening_${user?.id}_${id}`, JSON.stringify({ answers, fillAnswers }));
     }
   }, [answers, fillAnswers]);
+
+  // Persist play count to localStorage
+  useEffect(() => {
+    if (playCount > 0) {
+      localStorage.setItem(playCountKey, String(playCount));
+    }
+  }, [playCount]);
 
   // Save on beforeunload
   useEffect(() => {
@@ -117,7 +173,7 @@ const ListeningTest = () => {
     const handleBeforeUnload = () => {
       const hasAnswers = Object.keys(answers).length > 0 || Object.keys(fillAnswers).length > 0;
       if (hasAnswers && !result) {
-        localStorage.setItem(storageKey, JSON.stringify({ answers, fillAnswers }));
+        localStorage.setItem(`lwac_listening_${user?.id}_${id}`, JSON.stringify({ answers, fillAnswers }));
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -144,7 +200,7 @@ const ListeningTest = () => {
 
     // Max 2 plays like real IELTS
     if (playCount >= 2 && !result) {
-      alert("You have already played the audio 2 times (same as real IELTS).");
+      toast.warning('You have already played the audio 2 times (same as real IELTS).');
       return;
     }
 
@@ -161,7 +217,7 @@ const ListeningTest = () => {
           audioRef.current.play().then(() => setIsPlaying(true)).catch(e => {
             console.error("Playback Error:", e);
             setIsPlaying(false);
-            alert("Could not play audio. Please tap the play button again.");
+            toast.warning('Could not play audio. Please tap the play button again.');
           });
         }
       }, 100);
@@ -176,7 +232,7 @@ const ListeningTest = () => {
         onerror: () => setIsPlaying(false),
       });
     } else {
-      alert("No audio available for this lesson.");
+      toast.info('No audio available for this lesson.');
     }
   };
 
@@ -193,7 +249,7 @@ const ListeningTest = () => {
   const handleSubmit = async () => {
     const totalAnswered = Object.keys(answers).length + Object.keys(fillAnswers).length;
     if (totalAnswered < lesson.questions.length) {
-      alert("Please answer all questions before submitting.");
+      toast.warning('Please answer all questions before submitting.');
       return;
     }
 
@@ -220,11 +276,13 @@ const ListeningTest = () => {
       });
       setResult({ score: normalizedScore, correct: score, total: lesson.questions.length });
       setShowTranscript(true);
+      toast.success(`You scored ${normalizedScore}% (${score}/${lesson.questions.length})`, 'Test Submitted!');
       // Clear auto-saved data after successful submission
-      localStorage.removeItem(storageKey);
+      localStorage.removeItem(`lwac_listening_${user?.id}_${id}`);
+      localStorage.removeItem(playCountKey);
     } catch (error) {
       console.error("Failed to submit results", error);
-      alert("Error saving results.");
+      toast.error('Error saving results.');
     } finally {
       setIsSubmitting(false);
     }

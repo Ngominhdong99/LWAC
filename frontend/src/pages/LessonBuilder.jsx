@@ -3,12 +3,14 @@ import axios from 'axios';
 import { Plus, Trash2, Save, X, FileText, Headphones, Edit3, Mic, Image, Video, Link } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useToast } from '../components/Toast';
 import API_URL from '../api';
 
 const LessonBuilder = () => {
   const { user } = useAuth();
   const { id } = useParams();
   const navigate = useNavigate();
+  const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [lessonType, setLessonType] = useState('reading'); // reading, listening, writing, speaking
   
@@ -67,7 +69,7 @@ const LessonBuilder = () => {
         }
       } catch (e) {
         console.error(e);
-        alert('Failed to load lesson for editing');
+        toast.error('Failed to load lesson for editing');
       } finally {
         setLoading(false);
       }
@@ -116,14 +118,14 @@ const LessonBuilder = () => {
       return res.data.url;
     } catch (e) {
       console.error(e);
-      alert(`Failed to upload ${type}`);
+      toast.error(`Failed to upload ${type}`);
       return null;
     }
   };
 
   const handleSaveLesson = async () => {
     if (!title || !chapter) {
-      alert("Please provide a Title and Chapter.");
+      toast.warning('Please provide a Title and Chapter.');
       return;
     }
     setLoading(true);
@@ -192,7 +194,7 @@ const LessonBuilder = () => {
           }));
           await axios.put(`${API_URL}/lessons/${id}/questions`, questionsPayload);
         }
-        alert("Lesson updated successfully!");
+        toast.success('Lesson updated successfully!');
         navigate('/coach/lessons');
       } else {
         // Create Mode
@@ -209,7 +211,7 @@ const LessonBuilder = () => {
           await axios.post(`${API_URL}/lessons/${newLessonId}/questions/bulk`, questionsPayload);
         }
 
-        alert("Lesson created successfully!");
+        toast.success('Lesson created successfully!');
         setTitle('');
         setChapter('');
         setPassageText('');
@@ -221,7 +223,7 @@ const LessonBuilder = () => {
       }
     } catch (error) {
       console.error(error);
-      alert("Failed to save lesson.");
+      toast.error('Failed to save lesson.');
     } finally {
       setLoading(false);
     }

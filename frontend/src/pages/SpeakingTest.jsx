@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { Mic, Square, Play, Pause, Save, ArrowLeft, CheckCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../components/Toast';
 import API_URL from '../api';
 
 const SpeakingTest = () => {
@@ -11,6 +12,7 @@ const SpeakingTest = () => {
   const [searchParams] = useSearchParams();
   const isViewMode = searchParams.get('view') === 'true';
   const { user } = useAuth();
+  const toast = useToast();
   const [lesson, setLesson] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitted, setSubmitted] = useState(false);
@@ -141,7 +143,7 @@ const SpeakingTest = () => {
 
     } catch (err) {
       console.error("Failed to start recording:", err);
-      alert("Microphone access is required to take the speaking test.");
+      toast.warning('Microphone access is required to take the speaking test.');
     }
   };
 
@@ -161,7 +163,7 @@ const SpeakingTest = () => {
 
   const handleSubmit = async () => {
     if (!audioBlob) {
-      alert("Please record your answer first.");
+      toast.warning('Please record your answer first.');
       return;
     }
 
@@ -189,7 +191,7 @@ const SpeakingTest = () => {
       setSavedAudioUrl(uploadedFileUrl.startsWith('/static') ? `${API_URL}${uploadedFileUrl}` : uploadedFileUrl);
     } catch (e) {
       console.error("Failed to submit speaking test:", e);
-      alert("Error submitting your recording. Please try again.");
+      toast.error('Error submitting your recording. Please try again.');
     } finally {
       setLoading(false);
     }
