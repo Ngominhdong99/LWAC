@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, Trash2, Save, X, FileText, Headphones, Edit3, Mic, Image, Video } from 'lucide-react';
+import { Plus, Trash2, Save, X, FileText, Headphones, Edit3, Mic, Image, Video, Link } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useParams, useNavigate } from 'react-router-dom';
 import API_URL from '../api';
@@ -25,6 +25,9 @@ const LessonBuilder = () => {
   const [videoFile, setVideoFile] = useState(null);
   const [existingImageUrl, setExistingImageUrl] = useState('');
   const [existingVideoUrl, setExistingVideoUrl] = useState('');
+  const [imageUrlInput, setImageUrlInput] = useState('');
+  const [audioUrlInput, setAudioUrlInput] = useState('');
+  const [videoUrlInput, setVideoUrlInput] = useState('');
   
   // Writing
   const [task1Min, setTask1Min] = useState(150);
@@ -51,6 +54,9 @@ const LessonBuilder = () => {
           setPassageText(data.content?.passage || '');
           setExistingImageUrl(data.content?.image_url || '');
           setExistingVideoUrl(data.content?.video_url || '');
+          if (data.content?.image_url && data.content.image_url.startsWith('http')) setImageUrlInput(data.content.image_url);
+          if (data.content?.video_url && data.content.video_url.startsWith('http')) setVideoUrlInput(data.content.video_url);
+          if (data.media_url && data.media_url.startsWith('http')) setAudioUrlInput(data.media_url);
           if (data.questions) setQuestions(data.questions);
         } else if (data.type === 'writing') {
           setPassageText(data.content?.prompt || '');
@@ -123,20 +129,27 @@ const LessonBuilder = () => {
     setLoading(true);
 
     try {
+      // Audio: URL input takes priority, then file upload
       let media_url = null;
-      if (lessonType === 'listening' && audioFile) {
+      if (audioUrlInput.trim()) {
+        media_url = audioUrlInput.trim();
+      } else if (lessonType === 'listening' && audioFile) {
         media_url = await handleMediaUpload(audioFile, 'audio');
       }
 
-      // Upload image if selected
+      // Image: URL input takes priority, then file upload, then existing
       let image_url = existingImageUrl || null;
-      if (imageFile) {
+      if (imageUrlInput.trim()) {
+        image_url = imageUrlInput.trim();
+      } else if (imageFile) {
         image_url = await handleMediaUpload(imageFile, 'image');
       }
 
-      // Upload video if selected (listening only)
+      // Video: URL input takes priority, then file upload, then existing
       let video_url = existingVideoUrl || null;
-      if (videoFile && lessonType === 'listening') {
+      if (videoUrlInput.trim() && lessonType === 'listening') {
+        video_url = videoUrlInput.trim();
+      } else if (videoFile && lessonType === 'listening') {
         video_url = await handleMediaUpload(videoFile, 'video');
       }
 
@@ -272,25 +285,36 @@ const LessonBuilder = () => {
         {/* Dynamic Builder Core */}
         <hr className="border-slate-100" />
         
-        {/* Image Upload (Reading + Listening) */}
+        {/* Image (Reading + Listening) */}
         {(lessonType === 'reading' || lessonType === 'listening') && (
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center space-x-2">
-              <Image size={16} /> <span>Image Upload</span>
+              <Image size={16} /> <span>Image</span>
             </label>
             <input 
               type="file" 
               accept="image/*"
-              onChange={(e) => setImageFile(e.target.files[0])}
+              onChange={(e) => { setImageFile(e.target.files[0]); setImageUrlInput(''); }}
               className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
             />
-            {imageFile && <p className="text-xs text-slate-500 mt-2">New: {imageFile.name}</p>}
-            {!imageFile && existingImageUrl && (
+            <div className="flex items-center space-x-2 mt-2">
+              <Link size={14} className="text-slate-400 shrink-0" />
+              <input
+                type="text"
+                value={imageUrlInput}
+                onChange={(e) => { setImageUrlInput(e.target.value); if (e.target.value) setImageFile(null); }}
+                className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="or paste image URL..."
+              />
+            </div>
+            {imageFile && <p className="text-xs text-slate-500 mt-1">📎 {imageFile.name}</p>}
+            {!imageFile && !imageUrlInput && existingImageUrl && (
               <div className="mt-2">
                 <p className="text-xs text-green-600 mb-1">✅ Current image:</p>
-                <img src={`${API_URL}${existingImageUrl}`} alt="lesson" className="max-h-32 rounded-lg border" />
+                <img src={existingImageUrl.startsWith('http') ? existingImageUrl : `${API_URL}${existingImageUrl}`} alt="lesson" className="max-h-32 rounded-lg border" />
               </div>
             )}
+            {imageUrlInput && <p className="text-xs text-blue-600 mt-1">🔗 Using URL</p>}
           </div>
         )}
 
@@ -298,27 +322,51 @@ const LessonBuilder = () => {
         {lessonType === 'listening' && (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Audio Upload</label>
+              <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center space-x-2">
+                <Headphones size={16} /> <span>Audio</span>
+              </label>
               <input 
                 type="file" 
                 accept="audio/*"
-                onChange={(e) => setAudioFile(e.target.files[0])}
+                onChange={(e) => { setAudioFile(e.target.files[0]); setAudioUrlInput(''); }}
                 className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
               />
-              {audioFile && <p className="text-xs text-slate-500 mt-2">Selected: {audioFile.name}</p>}
+              <div className="flex items-center space-x-2 mt-2">
+                <Link size={14} className="text-slate-400 shrink-0" />
+                <input
+                  type="text"
+                  value={audioUrlInput}
+                  onChange={(e) => { setAudioUrlInput(e.target.value); if (e.target.value) setAudioFile(null); }}
+                  className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  placeholder="or paste audio URL..."
+                />
+              </div>
+              {audioFile && <p className="text-xs text-slate-500 mt-1">📎 {audioFile.name}</p>}
+              {audioUrlInput && <p className="text-xs text-blue-600 mt-1">🔗 Using URL</p>}
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center space-x-2">
-                <Video size={16} /> <span>Video Upload (optional)</span>
+                <Video size={16} /> <span>Video (optional)</span>
               </label>
               <input 
                 type="file" 
                 accept="video/*"
-                onChange={(e) => setVideoFile(e.target.files[0])}
+                onChange={(e) => { setVideoFile(e.target.files[0]); setVideoUrlInput(''); }}
                 className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100"
               />
-              {videoFile && <p className="text-xs text-slate-500 mt-2">Selected: {videoFile.name}</p>}
-              {!videoFile && existingVideoUrl && <p className="text-xs text-green-600 mt-2">✅ Existing video attached</p>}
+              <div className="flex items-center space-x-2 mt-2">
+                <Link size={14} className="text-slate-400 shrink-0" />
+                <input
+                  type="text"
+                  value={videoUrlInput}
+                  onChange={(e) => { setVideoUrlInput(e.target.value); if (e.target.value) setVideoFile(null); }}
+                  className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                  placeholder="or paste video URL..."
+                />
+              </div>
+              {videoFile && <p className="text-xs text-slate-500 mt-1">📎 {videoFile.name}</p>}
+              {videoUrlInput && <p className="text-xs text-blue-600 mt-1">🔗 Using URL</p>}
+              {!videoFile && !videoUrlInput && existingVideoUrl && <p className="text-xs text-green-600 mt-1">✅ Existing video attached</p>}
             </div>
           </div>
         )}

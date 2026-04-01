@@ -313,7 +313,7 @@ const ListeningTest = () => {
                 <video 
                   controls
                   className="w-full"
-                  src={`${API_URL}${lesson.content.video_url}`}
+                  src={lesson.content.video_url.startsWith('http') ? lesson.content.video_url : `${API_URL}${lesson.content.video_url}`}
                 >
                   Your browser does not support the video tag.
                 </video>
@@ -324,7 +324,7 @@ const ListeningTest = () => {
             {lesson.content?.image_url && (
               <div className="mb-6">
                 <img 
-                  src={`${API_URL}${lesson.content.image_url}`} 
+                  src={lesson.content.image_url.startsWith('http') ? lesson.content.image_url : `${API_URL}${lesson.content.image_url}`} 
                   alt={lesson.title} 
                   className="w-full rounded-xl shadow-md border border-slate-200"
                 />

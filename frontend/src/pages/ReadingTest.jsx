@@ -308,7 +308,7 @@ const ReadingTest = () => {
             {lesson.content?.image_url && (
               <div className="mb-6">
                 <img 
-                  src={`${API_URL}${lesson.content.image_url}`} 
+                  src={lesson.content.image_url.startsWith('http') ? lesson.content.image_url : `${API_URL}${lesson.content.image_url}`} 
                   alt={lesson.title} 
                   className="w-full rounded-xl shadow-md border border-slate-200"
                 />
