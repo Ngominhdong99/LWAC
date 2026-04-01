@@ -205,8 +205,8 @@ const MainLayout = () => {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 md:ml-64 w-full max-w-7xl mx-auto min-h-screen mt-14 md:mt-0">
-        <div className="w-full h-full">
+      <main className="flex-1 md:ml-64 w-full min-h-screen mt-14 md:mt-0 relative flex flex-col">
+        <div className="w-full h-full flex-1 max-w-7xl mx-auto">
             <Outlet />
         </div>
       </main>
