@@ -349,17 +349,29 @@ Please explain in a clear, concise way:
 
 Write in English with a friendly, professional tone. Keep it under 300 words."""
 
-    try:
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=[{"role": "user", "parts": [{"text": prompt}]}],
-            config=genai.types.GenerateContentConfig(
-                temperature=0.4,
-                max_output_tokens=600,
-            ),
-        )
-        return {"explanation": response.text}
-    except Exception as e:
-        print(f"[AI Explain] Error: {e}")
-        return {"explanation": f"AI explanation failed: {str(e)[:200]}"}
+    models_to_try = [
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash-lite",
+        "gemini-2.0-flash",
+    ]
+
+    client = genai.Client(api_key=api_key)
+    last_error = None
+
+    for model_name in models_to_try:
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=[{"role": "user", "parts": [{"text": prompt}]}],
+                config=genai.types.GenerateContentConfig(
+                    temperature=0.4,
+                    max_output_tokens=600,
+                ),
+            )
+            return {"explanation": response.text}
+        except Exception as e:
+            last_error = e
+            print(f"[AI Explain] {model_name} failed: {e}")
+            continue
+
+    return {"explanation": f"AI explanation failed after trying all models: {str(last_error)[:200]}"}
