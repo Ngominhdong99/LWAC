@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Users, Plus, Trash2, Edit3, X, Eye, ChevronDown, RefreshCw, Save, Sparkles, Loader2 } from 'lucide-react';
+import { Users, Plus, Trash2, Edit3, X, Eye, ChevronDown, RefreshCw, Save, Sparkles, Loader2, Send, MessageSquare } from 'lucide-react';
 import API_URL from '../api';
 
 const StudentManager = () => {
@@ -20,7 +20,9 @@ const StudentManager = () => {
   // Writing feedback state
   const [selectedText, setSelectedText] = useState('');
   const [feedbackComment, setFeedbackComment] = useState('');
+  const [generalComment, setGeneralComment] = useState('');
   const [scoreInput, setScoreInput] = useState('');
+  const [coachNotes, setCoachNotes] = useState({}); // { [questionId]: string }
 
   const fetchStudents = async () => {
     try {
@@ -128,6 +130,10 @@ const StudentManager = () => {
       });
       // Initialize scoring state for writing/speaking if un-graded
       setScoreInput(resultRes.data?.responses?.score || '');
+      // Load existing coach notes
+      setCoachNotes(resultRes.data?.responses?.coach_notes || {});
+      setAiExplain({});
+      setGeneralComment('');
     } catch (e) {
       alert('Error fetching detailed result');
       console.error(e);
@@ -495,6 +501,56 @@ const StudentManager = () => {
                           <p className="text-slate-400 text-center text-sm italic">No comments yet.</p>
                         )}
                       </div>
+
+                      {/* General Comment Input (always visible) */}
+                      <div className="mt-4 pt-4 border-t border-slate-200">
+                        <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center space-x-2">
+                          <MessageSquare size={14} /> <span>Add General Comment</span>
+                        </label>
+                        <textarea 
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                          placeholder="Type your feedback here..."
+                          value={generalComment}
+                          onChange={e => setGeneralComment(e.target.value)}
+                          rows={3}
+                        />
+                        <button 
+                          onClick={() => {
+                            if (!generalComment.trim()) return;
+                            setSelectedText('General comment');
+                            setFeedbackComment(generalComment);
+                            // Trigger save immediately
+                            const doSave = async () => {
+                              try {
+                                const currentResponses = viewingResult.result.responses || {};
+                                const newFeedback = {
+                                  quote: 'General comment',
+                                  comment: generalComment,
+                                  timestamp: new Date().toISOString()
+                                };
+                                const updatedFeedbackList = [...(currentResponses.feedback || []), newFeedback];
+                                const res = await axios.put(`${API_URL}/results/${viewingResult.result.id}`, {
+                                  responses: {
+                                    ...currentResponses,
+                                    feedback: updatedFeedbackList
+                                  }
+                                });
+                                setViewingResult(prev => ({ ...prev, result: res.data }));
+                                setGeneralComment('');
+                                setSelectedText('');
+                                setFeedbackComment('');
+                              } catch (e) {
+                                alert('Failed to save comment.');
+                              }
+                            };
+                            doSave();
+                          }}
+                          disabled={!generalComment.trim()}
+                          className="mt-2 flex items-center space-x-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Send size={14} /> <span>Send Comment</span>
+                        </button>
+                      </div>
                     </div>
 
                     {/* Scoring */}
@@ -636,46 +692,96 @@ const StudentManager = () => {
                           </div>
                         )}
 
-                        {/* AI Explain Button */}
-                        <div className="pt-3 border-t border-slate-100 mt-3">
-                          {aiExplain[q.id]?.text ? (
-                            <div className="bg-violet-50 border border-violet-200 rounded-xl p-4">
-                              <div className="flex items-center space-x-2 mb-2">
-                                <Sparkles size={14} className="text-violet-600" />
-                                <span className="font-bold text-violet-700 text-xs uppercase tracking-wider">AI Explanation</span>
+                        {/* AI Explain + Coach Note */}
+                        <div className="pt-3 border-t border-slate-100 mt-3 space-y-3">
+                          {/* AI Explain */}
+                          <div className="flex items-start space-x-2">
+                            {aiExplain[q.id]?.text ? (
+                              <div className="flex-1 bg-violet-50 border border-violet-200 rounded-xl p-4">
+                                <div className="flex items-center space-x-2 mb-2">
+                                  <Sparkles size={14} className="text-violet-600" />
+                                  <span className="font-bold text-violet-700 text-xs uppercase tracking-wider">AI Explanation</span>
+                                </div>
+                                <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap">{aiExplain[q.id].text}</p>
                               </div>
-                              <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap">{aiExplain[q.id].text}</p>
+                            ) : (
+                              <button
+                                onClick={async () => {
+                                  setAiExplain(prev => ({ ...prev, [q.id]: { loading: true } }));
+                                  try {
+                                    const content = viewingResult.lesson.content;
+                                    const passage = content?.paragraphs
+                                      ? content.paragraphs.map(p => p.text).join('\n\n')
+                                      : content?.passage || '';
+                                    const res = await axios.post(`${API_URL}/coach/ai-explain`, {
+                                      passage,
+                                      question_text: q.question_text,
+                                      options: q.options || null,
+                                      correct_answer: q.correct_answer
+                                    });
+                                    setAiExplain(prev => ({ ...prev, [q.id]: { text: res.data.explanation } }));
+                                  } catch (e) {
+                                    setAiExplain(prev => ({ ...prev, [q.id]: { text: 'Failed to get AI explanation. Please try again later.' } }));
+                                  }
+                                }}
+                                disabled={aiExplain[q.id]?.loading}
+                                className="flex items-center space-x-2 text-xs font-semibold text-violet-600 hover:text-violet-800 bg-violet-50 hover:bg-violet-100 px-3 py-2 rounded-lg transition-colors disabled:opacity-50"
+                              >
+                                {aiExplain[q.id]?.loading ? (
+                                  <><Loader2 size={14} className="animate-spin" /><span>Analyzing...</span></>
+                                ) : (
+                                  <><Sparkles size={14} /><span>AI Explain</span></>
+                                )}
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Coach Note Input */}
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1 flex items-center space-x-1">
+                              <MessageSquare size={12} /> <span>Coach Note</span>
+                            </label>
+                            <div className="flex space-x-2">
+                              <textarea
+                                value={coachNotes[q.id] || ''}
+                                onChange={(e) => setCoachNotes(prev => ({ ...prev, [q.id]: e.target.value }))}
+                                className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                placeholder="Add your own explanation or note for this question..."
+                                rows={2}
+                              />
+                              <button
+                                onClick={async () => {
+                                  const note = coachNotes[q.id];
+                                  if (!note?.trim()) return;
+                                  try {
+                                    const currentResponses = viewingResult.result.responses || {};
+                                    const coachNotesData = currentResponses.coach_notes || {};
+                                    coachNotesData[q.id] = note;
+                                    const res = await axios.put(`${API_URL}/results/${viewingResult.result.id}`, {
+                                      responses: {
+                                        ...currentResponses,
+                                        coach_notes: coachNotesData
+                                      }
+                                    });
+                                    setViewingResult(prev => ({ ...prev, result: res.data }));
+                                    alert('Note saved!');
+                                  } catch (e) {
+                                    alert('Failed to save note.');
+                                  }
+                                }}
+                                className="self-end bg-primary-600 hover:bg-primary-700 text-white p-2 rounded-lg transition-colors"
+                                title="Save note"
+                              >
+                                <Send size={14} />
+                              </button>
                             </div>
-                          ) : (
-                            <button
-                              onClick={async () => {
-                                setAiExplain(prev => ({ ...prev, [q.id]: { loading: true } }));
-                                try {
-                                  const content = viewingResult.lesson.content;
-                                  const passage = content?.paragraphs
-                                    ? content.paragraphs.map(p => p.text).join('\n\n')
-                                    : content?.passage || '';
-                                  const res = await axios.post(`${API_URL}/coach/ai-explain`, {
-                                    passage,
-                                    question_text: q.question_text,
-                                    options: q.options || null,
-                                    correct_answer: q.correct_answer
-                                  });
-                                  setAiExplain(prev => ({ ...prev, [q.id]: { text: res.data.explanation } }));
-                                } catch (e) {
-                                  setAiExplain(prev => ({ ...prev, [q.id]: { text: 'Failed to get AI explanation.' } }));
-                                }
-                              }}
-                              disabled={aiExplain[q.id]?.loading}
-                              className="flex items-center space-x-2 text-xs font-semibold text-violet-600 hover:text-violet-800 bg-violet-50 hover:bg-violet-100 px-3 py-2 rounded-lg transition-colors disabled:opacity-50"
-                            >
-                              {aiExplain[q.id]?.loading ? (
-                                <><Loader2 size={14} className="animate-spin" /><span>Analyzing...</span></>
-                              ) : (
-                                <><Sparkles size={14} /><span>AI Explain</span></>
-                              )}
-                            </button>
-                          )}
+                            {viewingResult.result.responses?.coach_notes?.[q.id] && !coachNotes[q.id] && (
+                              <div className="mt-2 bg-primary-50 border border-primary-200 rounded-lg p-3">
+                                <p className="text-xs font-bold text-primary-700 uppercase tracking-wider mb-1">Saved Coach Note</p>
+                                <p className="text-sm text-slate-700 whitespace-pre-wrap">{viewingResult.result.responses.coach_notes[q.id]}</p>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
