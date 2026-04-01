@@ -315,9 +315,15 @@ const ReadingTest = () => {
               </div>
             )}
             <div className="space-y-6 text-slate-700 text-base md:text-lg leading-relaxed font-serif selection:bg-primary-200 selection:text-primary-900">
-              {lesson.content.paragraphs && lesson.content.paragraphs.map(p => (
-                <p key={p.id} className="text-justify select-text">{p.text}</p>
-              ))}
+              {lesson.content.paragraphs ? (
+                lesson.content.paragraphs.map(p => (
+                  <p key={p.id} className="text-justify select-text">{p.text}</p>
+                ))
+              ) : lesson.content.passage ? (
+                lesson.content.passage.split('\n\n').filter(Boolean).map((text, i) => (
+                  <p key={i} className="text-justify select-text">{text}</p>
+                ))
+              ) : null}
             </div>
           </div>
           
