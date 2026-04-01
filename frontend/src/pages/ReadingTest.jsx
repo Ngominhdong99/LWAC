@@ -98,9 +98,18 @@ const ReadingTest = () => {
         } else if (!isViewMode && user) {
           // Check if already submitted (prevents re-submit on F5)
           try {
-            const resResults = await axios.get(`${API_URL}/results/${user.id}`);
+            const [resResults, resAssignments] = await Promise.all([
+              axios.get(`${API_URL}/results/${user.id}`),
+              axios.get(`${API_URL}/users/${user.id}/assignments`)
+            ]);
+            
+            const lessonAssignment = resAssignments.data.find(a => a.lesson_id === parseInt(id));
+            const isRetakeAllowed = lessonAssignment?.allow_retake === true;
+
             const lessonResults = resResults.data.filter(r => r.lesson_id === parseInt(id));
-            if (lessonResults.length > 0) {
+            
+            // Only force View mode if they have results AND retake is not allowed
+            if (lessonResults.length > 0 && !isRetakeAllowed) {
               const latest = lessonResults[lessonResults.length - 1];
               const questions = lessonRes.data.questions || [];
               const savedMc = {};
@@ -118,14 +127,14 @@ const ReadingTest = () => {
               setFillAnswers(savedFb);
               const correctCount = questions.reduce((acc, q) => {
                 if (q.type === 'multiple_choice' && savedMc[q.id] === q.correct_answer) return acc + 1;
-                if (q.type === 'fill_blank' && (savedFb[q.id] || '').trim().toLowerCase() === q.correct_answer.toLowerCase()) return acc + 1;
+                if (q.type === 'fill_blank' && (savedFb[q.id] || '').trim().toLowerCase() === (q.correct_answer || '').toLowerCase()) return acc + 1;
                 return acc;
               }, 0);
               setResult({ score: latest.score, correct: correctCount, total: questions.length });
               setCoachFeedback(latest.responses?.coach_notes || null);
               localStorage.removeItem(`lwac_reading_${user?.id}_${id}`);
             } else {
-              // Restore from localStorage only if not yet submitted
+              // Restore from localStorage only if not yet submitted or if retaking
               try {
                 const saved = localStorage.getItem(`lwac_reading_${user?.id}_${id}`);
                 if (saved) {
@@ -484,6 +493,16 @@ const ReadingTest = () => {
                     )}
                   </div>
                 )}
+
+                {/* Coach note for this question */}
+                {coachFeedback?.[String(q.id)] && (
+                  <div className="pl-9 mt-3">
+                    <div className="bg-primary-50 border border-primary-200 rounded-xl p-4">
+                      <p className="text-xs font-bold text-primary-700 uppercase tracking-wider mb-1">💬 Coach's Note</p>
+                      <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{coachFeedback[String(q.id)]}</p>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -511,16 +530,6 @@ const ReadingTest = () => {
                   )}
                 </div>
               </div>
-
-              {/* Coach note for this question */}
-              {coachFeedback?.[String(q.id)] && (
-                <div className="pl-9 mt-3">
-                  <div className="bg-primary-50 border border-primary-200 rounded-xl p-4">
-                    <p className="text-xs font-bold text-primary-700 uppercase tracking-wider mb-1">💬 Coach's Note</p>
-                    <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{coachFeedback[String(q.id)]}</p>
-                  </div>
-                </div>
-              )}
             </div>
           ) : !isViewMode && (
             <div className="fixed md:absolute bottom-16 md:bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-slate-200 flex justify-end z-10">

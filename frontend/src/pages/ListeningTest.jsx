@@ -87,9 +87,18 @@ const ListeningTest = () => {
 
           // Check if already submitted (prevents re-submit on F5)
           try {
-            const resResults = await axios.get(`${API_URL}/results/${user.id}`);
+            const [resResults, resAssignments] = await Promise.all([
+              axios.get(`${API_URL}/results/${user.id}`),
+              axios.get(`${API_URL}/users/${user.id}/assignments`)
+            ]);
+            
+            const lessonAssignment = resAssignments.data.find(a => a.lesson_id === parseInt(id));
+            const isRetakeAllowed = lessonAssignment?.allow_retake === true;
+
             const lessonResults = resResults.data.filter(r => r.lesson_id === parseInt(id));
-            if (lessonResults.length > 0) {
+            
+            // Only force View mode if they have results AND retake is not allowed
+            if (lessonResults.length > 0 && !isRetakeAllowed) {
               const latest = lessonResults[lessonResults.length - 1];
               const questions = lessonRes.data.questions || [];
               const savedMc = {};
@@ -107,14 +116,14 @@ const ListeningTest = () => {
               setFillAnswers(savedFb);
               const correctCount = questions.reduce((acc, q) => {
                 if (q.type === 'multiple_choice' && savedMc[q.id] === q.correct_answer) return acc + 1;
-                if (q.type === 'fill_blank' && (savedFb[q.id] || '').trim().toLowerCase() === q.correct_answer.toLowerCase()) return acc + 1;
+                if (q.type === 'fill_blank' && (savedFb[q.id] || '').trim().toLowerCase() === (q.correct_answer || '').toLowerCase()) return acc + 1;
                 return acc;
               }, 0);
               setResult({ score: latest.score, correct: correctCount, total: questions.length });
               setCoachFeedback(latest.responses?.coach_notes || null);
               setShowTranscript(true);
             } else {
-              // Restore answers from localStorage only if not yet submitted
+              // Restore answers from localStorage only if not yet submitted or retake
               try {
                 const saved = localStorage.getItem(`lwac_listening_${user?.id}_${id}`);
                 if (saved) {
@@ -261,7 +270,7 @@ const ListeningTest = () => {
         if (answers[q.id] === q.correct_answer) score++;
       } else if (q.type === 'fill_blank') {
         const userAns = (fillAnswers[q.id] || '').trim().toLowerCase();
-        if (userAns === q.correct_answer.toLowerCase()) score++;
+        if (userAns === (q.correct_answer || '').toLowerCase()) score++;
       }
     });
 
@@ -459,15 +468,25 @@ const ListeningTest = () => {
                       disabled={result !== null}
                       className={`w-full px-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-amber-400 ${
                         result !== null
-                          ? (fillAnswers[q.id] || '').trim().toLowerCase() === q.correct_answer.toLowerCase()
+                          ? (fillAnswers[q.id] || '').trim().toLowerCase() === (q.correct_answer || '').toLowerCase()
                             ? 'border-green-500 bg-green-50 text-green-800'
                             : 'border-red-500 bg-red-50 text-red-800'
                           : 'border-slate-200 bg-white'
                       }`}
                     />
-                    {result !== null && (fillAnswers[q.id] || '').trim().toLowerCase() !== q.correct_answer.toLowerCase() && (
+                    {result !== null && (fillAnswers[q.id] || '').trim().toLowerCase() !== (q.correct_answer || '').toLowerCase() && (
                       <p className="text-sm text-green-600 mt-1 font-medium">Correct answer: {q.correct_answer}</p>
                     )}
+                  </div>
+                )}
+
+                {/* Coach note for this question */}
+                {coachFeedback?.[String(q.id)] && (
+                  <div className="pl-9 mt-3">
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                      <p className="text-xs font-bold text-amber-700 uppercase tracking-wider mb-1">💬 Coach's Note</p>
+                      <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{coachFeedback[String(q.id)]}</p>
+                    </div>
                   </div>
                 )}
               </div>
