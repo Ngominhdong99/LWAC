@@ -3,10 +3,12 @@ import axios from 'axios';
 import { Trash2, FileText, Headphones, Edit3, Mic, BookOpen } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import API_URL from '../api';
+import ConfirmModal from '../components/ConfirmModal';
 
 const LessonManager = () => {
   const [lessons, setLessons] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [confirmDelete, setConfirmDelete] = useState(null);
   const navigate = useNavigate();
 
   const fetchLessons = async () => {
@@ -26,18 +28,20 @@ const LessonManager = () => {
     fetchLessons();
   }, []);
 
-  const handleDelete = async (id, title) => {
-    if (!window.confirm(`Are you sure you want to delete "${title}"? This will also remove any student assignments and results connected to this lesson.`)) {
-      return;
-    }
-
-    try {
-      await axios.delete(`${API_URL}/lessons/${id}`);
-      setLessons(lessons.filter(l => l.id !== id));
-    } catch (e) {
-      console.error(e);
-      alert('Failed to delete lesson.');
-    }
+  const handleDelete = (id, title) => {
+    setConfirmDelete({
+      title: 'Delete Lesson?',
+      message: `Are you sure you want to delete "${title}"? This will also remove any student assignments and results connected to this lesson.`,
+      onConfirm: async () => {
+        try {
+          await axios.delete(`${API_URL}/lessons/${id}`);
+          setLessons(lessons.filter(l => l.id !== id));
+        } catch (e) {
+          console.error(e);
+          alert('Failed to delete lesson.');
+        }
+      }
+    });
   };
 
   const handleOpenEdit = (lesson) => {
@@ -143,7 +147,16 @@ const LessonManager = () => {
         </div>
       </div>
 
-
+      <ConfirmModal
+        isOpen={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        onConfirm={confirmDelete?.onConfirm}
+        title={confirmDelete?.title}
+        message={confirmDelete?.message}
+        confirmText="Yes, delete it"
+        cancelText="Cancel"
+        isDestructive={true}
+      />
     </div>
   );
 };

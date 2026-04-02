@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Users, Plus, Trash2, Edit3, X, Eye, ChevronDown, RefreshCw, Save, Sparkles, Loader2, Send, MessageSquare } from 'lucide-react';
 import { useToast } from '../components/Toast';
 import API_URL from '../api';
+import ConfirmModal from '../components/ConfirmModal';
 
 const StudentManager = () => {
   const [students, setStudents] = useState([]);
@@ -17,6 +18,7 @@ const StudentManager = () => {
   const [assigningStudentId, setAssigningStudentId] = useState(null);
   const [viewingResult, setViewingResult] = useState(null);
   const [aiExplain, setAiExplain] = useState({}); // { [questionId]: { loading, text } }
+  const [confirmDialog, setConfirmDialog] = useState(null);
   
   // Writing feedback state
   const [selectedText, setSelectedText] = useState('');
@@ -63,12 +65,18 @@ const StudentManager = () => {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm('Delete this student?')) return;
-    try {
-      await axios.delete(`${API_URL}/coach/students/${id}`);
-      fetchStudents();
-    } catch (e) { toast.error('Error deleting student'); }
+  const handleDelete = (id) => {
+    setConfirmDialog({
+      title: 'Delete Student?',
+      message: 'Are you sure you want to delete this student?',
+      onConfirm: async () => {
+        try {
+          await axios.delete(`${API_URL}/coach/students/${id}`);
+          fetchStudents();
+          setConfirmDialog(null);
+        } catch (e) { toast.error('Error deleting student'); }
+      }
+    });
   };
 
   const handleEdit = (s) => {
@@ -100,12 +108,18 @@ const StudentManager = () => {
     } catch (e) { toast.error('Error assigning test'); }
   };
 
-  const handleDeleteAssignment = async (assignmentId) => {
-    if (!confirm('Remove this assignment?')) return;
-    try {
-      await axios.delete(`${API_URL}/coach/assignments/${assignmentId}`);
-      refreshAssignments(expandedId);
-    } catch (e) { toast.error('Error removing assignment'); }
+  const handleDeleteAssignment = (assignmentId) => {
+    setConfirmDialog({
+      title: 'Remove Assignment?',
+      message: 'Are you sure you want to remove this assignment?',
+      onConfirm: async () => {
+        try {
+          await axios.delete(`${API_URL}/coach/assignments/${assignmentId}`);
+          refreshAssignments(expandedId);
+          setConfirmDialog(null);
+        } catch (e) { toast.error('Error removing assignment'); }
+      }
+    });
   };
 
   const handleToggleRetake = async (assignmentId) => {
@@ -797,6 +811,16 @@ const StudentManager = () => {
         </div>
       )}
 
+      <ConfirmModal
+        isOpen={!!confirmDialog}
+        onClose={() => setConfirmDialog(null)}
+        onConfirm={confirmDialog?.onConfirm}
+        title={confirmDialog?.title}
+        message={confirmDialog?.message}
+        confirmText="Yes, delete it"
+        cancelText="Cancel"
+        isDestructive={true}
+      />
     </div>
   );
 };

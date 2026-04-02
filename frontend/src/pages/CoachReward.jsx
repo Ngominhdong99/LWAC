@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Trophy, CheckCircle, Clock, ExternalLink, User } from 'lucide-react';
 import API_URL from '../api';
+import ConfirmModal from '../components/ConfirmModal';
 
 const CoachReward = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [confirmDialog, setConfirmDialog] = useState(null);
 
   const fetchRequests = async () => {
     try {
@@ -17,12 +19,18 @@ const CoachReward = () => {
 
   useEffect(() => { fetchRequests(); }, []);
 
-  const handleComplete = async (id) => {
-    if (!confirm('Mark this request as completed? (Payment has been sent)')) return;
-    try {
-      await axios.put(`${API_URL}/rewards/requests/${id}/complete`);
-      fetchRequests();
-    } catch (e) { alert('Failed to complete request'); }
+  const handleComplete = (id) => {
+    setConfirmDialog({
+      title: 'Complete Request?',
+      message: 'Mark this request as completed? Make sure payment has been sent.',
+      onConfirm: async () => {
+        try {
+          await axios.put(`${API_URL}/rewards/requests/${id}/complete`);
+          fetchRequests();
+          setConfirmDialog(null);
+        } catch (e) { alert('Failed to complete request'); }
+      }
+    });
   };
 
   const pending = requests.filter(r => r.status === 'pending');
@@ -132,6 +140,17 @@ const CoachReward = () => {
           </div>
         </div>
       )}
+      
+      <ConfirmModal
+        isOpen={!!confirmDialog}
+        onClose={() => setConfirmDialog(null)}
+        onConfirm={confirmDialog?.onConfirm}
+        title={confirmDialog?.title}
+        message={confirmDialog?.message}
+        confirmText="Yes, complete it"
+        cancelText="Cancel"
+        isDestructive={false}
+      />
     </div>
   );
 };
