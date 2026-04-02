@@ -303,6 +303,7 @@ const ListeningTest = () => {
   const nextLesson = getNextLesson();
   const answeredCount = Object.keys(answers).length + Object.keys(fillAnswers).length;
   const progressPercent = lesson.questions.length > 0 ? Math.round((answeredCount / lesson.questions.length) * 100) : 0;
+  const hasAudio = !!(lesson.media_url || lesson.content?.transcript);
 
   return (
     <div className="h-full flex flex-col bg-secondary">
@@ -340,50 +341,67 @@ const ListeningTest = () => {
         <section className="md:w-1/2 overflow-y-auto p-4 md:p-8 bg-white md:border-r border-slate-200 shadow-sm relative z-0">
           <div className="max-w-prose mx-auto">
             {/* Audio Player Card */}
-            <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 md:p-8 border border-amber-200 mb-6">
-              <div className="flex flex-col items-center space-y-4">
-                <div className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transition-all ${isPlaying ? 'bg-amber-500 scale-110 animate-pulse' : 'bg-amber-400'}`}>
-                  <Headphones size={36} className="text-white" />
-                </div>
-                <h3 className="text-lg font-bold text-slate-800 text-center">{lesson.title}</h3>
-                <p className="text-sm text-slate-500 text-center">Listen carefully and answer the questions. You can play the audio up to 2 times.</p>
-
-                <button
-                  onClick={playAudio}
-                  disabled={playCount >= 2 && !isPlaying && !result}
-                  className={`flex items-center space-x-3 px-8 py-3 rounded-xl font-semibold text-lg transition-all shadow-md ${
-                    isPlaying
-                      ? 'bg-red-500 hover:bg-red-600 text-white'
-                      : playCount >= 2 && !result
-                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                        : 'bg-amber-500 hover:bg-amber-600 text-white hover:scale-105'
-                  }`}
-                >
-                  {isPlaying ? <Pause size={22} /> : <Play size={22} />}
-                  <span>{isPlaying ? 'Pause' : playCount === 0 ? 'Play Audio' : `Play Again (${2 - playCount} left)`}</span>
-                </button>
-
-                {/* Volume indicator when playing */}
-                {isPlaying && (
-                  <div className="flex items-center space-x-1">
-                    {[1,2,3,4,5].map(i => (
-                      <div key={i} className="w-1 bg-amber-400 rounded-full animate-pulse" style={{ height: `${8 + Math.random() * 16}px`, animationDelay: `${i * 0.1}s` }}></div>
-                    ))}
+            {hasAudio && (
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 md:p-8 border border-amber-200 mb-6">
+                <div className="flex flex-col items-center space-y-4">
+                  <div className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transition-all ${isPlaying ? 'bg-amber-500 scale-110 animate-pulse' : 'bg-amber-400'}`}>
+                    <Headphones size={36} className="text-white" />
                   </div>
-                )}
+                  <h3 className="text-lg font-bold text-slate-800 text-center">{lesson.title}</h3>
+                  <p className="text-sm text-slate-500 text-center">Listen carefully and answer the questions. You can play the audio up to 2 times.</p>
+
+                  <button
+                    onClick={playAudio}
+                    disabled={playCount >= 2 && !isPlaying && !result}
+                    className={`flex items-center space-x-3 px-8 py-3 rounded-xl font-semibold text-lg transition-all shadow-md ${
+                      isPlaying
+                        ? 'bg-red-500 hover:bg-red-600 text-white'
+                        : playCount >= 2 && !result
+                          ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                          : 'bg-amber-500 hover:bg-amber-600 text-white hover:scale-105'
+                    }`}
+                  >
+                    {isPlaying ? <Pause size={22} /> : <Play size={22} />}
+                    <span>{isPlaying ? 'Pause' : playCount === 0 ? 'Play Audio' : `Play Again (${2 - playCount} left)`}</span>
+                  </button>
+
+                  {/* Volume indicator when playing */}
+                  {isPlaying && (
+                    <div className="flex items-center space-x-1">
+                      {[1,2,3,4,5].map(i => (
+                        <div key={i} className="w-1 bg-amber-400 rounded-full animate-pulse" style={{ height: `${8 + Math.random() * 16}px`, animationDelay: `${i * 0.1}s` }}></div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Video Player (if provided) */}
             {lesson.content?.video_url && (
               <div className="bg-slate-900 rounded-2xl overflow-hidden mb-6 border border-slate-700">
-                <video 
-                  controls
-                  className="w-full"
-                  src={lesson.content.video_url.startsWith('http') ? lesson.content.video_url : `${API_URL}${lesson.content.video_url}`}
-                >
-                  Your browser does not support the video tag.
-                </video>
+                {(() => {
+                  const url = lesson.content.video_url;
+                  const finalUrl = url.startsWith('http') ? url : `${API_URL}${url}`;
+                  const ytMatch = finalUrl.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/);
+                  if (ytMatch && ytMatch[2].length === 11) {
+                    return (
+                      <iframe
+                        className="w-full aspect-video"
+                        src={`https://www.youtube.com/embed/${ytMatch[2]}`}
+                        title="YouTube video player"
+                        frameBorder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      ></iframe>
+                    );
+                  }
+                  return (
+                    <video controls className="w-full" src={finalUrl}>
+                      Your browser does not support the video tag.
+                    </video>
+                  );
+                })()}
               </div>
             )}
 

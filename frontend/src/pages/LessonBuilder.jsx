@@ -376,11 +376,30 @@ const LessonBuilder = () => {
               </div>
               {videoFile && <p className="text-xs text-slate-500 mt-1">📎 {videoFile.name}</p>}
               {!videoFile && !videoUrlInput && existingVideoUrl && (
-                <div className="mt-2">
-                  <p className="text-xs text-green-600 mb-1">✅ Current video attached</p>
+                <div className="mt-2 text-center bg-slate-100 rounded-xl p-2 border border-slate-200">
+                  <p className="text-xs text-green-600 mb-2 font-bold flex justify-center items-center"><span className="mr-1">✅</span> Current video attached</p>
+                  {(() => {
+                    const finalUrl = existingVideoUrl.startsWith('http') ? existingVideoUrl : `${API_URL}${existingVideoUrl}`;
+                    const ytMatch = finalUrl.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/);
+                    if (ytMatch && ytMatch[2].length === 11) {
+                      return <iframe className="w-full aspect-video rounded-lg shadow-sm bg-black" src={`https://www.youtube.com/embed/${ytMatch[2]}`} title="YouTube" frameBorder="0" allowFullScreen></iframe>;
+                    }
+                    return <video controls className="w-full max-h-48 rounded-lg shadow-sm bg-black mx-auto" src={finalUrl}></video>;
+                  })()}
                 </div>
               )}
-              {videoUrlInput && <p className="text-xs text-blue-600 mt-1">🔗 Using URL</p>}
+              {videoUrlInput && (
+                <div className="mt-2 text-center bg-slate-100 rounded-xl p-2 border border-slate-200">
+                  <p className="text-xs text-blue-600 mb-2 font-bold flex justify-center items-center"><span className="mr-1">🔗</span> Using URL</p>
+                  {(() => {
+                    const ytMatch = videoUrlInput.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/);
+                    if (ytMatch && ytMatch[2].length === 11) {
+                      return <iframe className="w-full aspect-video rounded-lg shadow-sm bg-black" src={`https://www.youtube.com/embed/${ytMatch[2]}`} title="YouTube preview" frameBorder="0" allowFullScreen></iframe>;
+                    }
+                    return <video controls className="w-full max-h-48 rounded-lg shadow-sm bg-black mx-auto" src={videoUrlInput}></video>;
+                  })()}
+                </div>
+              )}
             </div>
           </div>
         )}
