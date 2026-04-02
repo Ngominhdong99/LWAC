@@ -26,6 +26,7 @@ const WritingTest = () => {
   const [selection, setSelection] = useState(null);
   const [askTeacherText, setAskTeacherText] = useState(null);
   const [savedSelection, setSavedSelection] = useState(false);
+  const [coachFeedback, setCoachFeedback] = useState(null);
 
   const storageKey = `lwac_writing_${user?.id}_${id}`;
 
@@ -56,6 +57,7 @@ const WritingTest = () => {
                 score_normalized: latest.score,
                 evaluation: latest.responses?.evaluation || {}
               });
+              setCoachFeedback(latest.responses?.coach_notes || null);
             }
           } catch (e) { console.error('Failed to load result for view mode', e); }
         } else if (!isViewMode) {
@@ -275,7 +277,8 @@ const WritingTest = () => {
             )}
 
             {/* Evaluation Results */}
-            {result && (
+            {/* Evaluation Results */}
+            {result && result.evaluation?.estimated_band !== undefined && (
               <div className="mt-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <h3 className="text-xl font-bold text-slate-900 mb-4 flex items-center">
                   <span className="bg-primary-500 w-2 h-6 rounded-full mr-3"></span>
@@ -293,13 +296,24 @@ const WritingTest = () => {
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  {Object.entries(result.evaluation.criteria_scores).map(([crit, score]) => (
+                  {Object.entries(result.evaluation.criteria_scores || {}).map(([crit, score]) => (
                     <div key={crit} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
                       <span className="text-xs text-slate-500 font-medium tracking-wide uppercase mb-2">{crit}</span>
-                      <span className="text-xl font-bold text-slate-800">{score.toFixed(1)}</span>
+                      <span className="text-xl font-bold text-slate-800">{Number(score).toFixed(1)}</span>
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Coach Feedback */}
+            {coachFeedback && (
+              <div className="mt-8 bg-amber-50 rounded-2xl p-6 border border-amber-200 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <h4 className="font-bold text-amber-800 mb-3 flex items-center">
+                  <span className="text-xl mr-2">👨‍🏫</span>
+                  Coach's Note
+                </h4>
+                <p className="text-amber-900 leading-relaxed whitespace-pre-line">{coachFeedback}</p>
               </div>
             )}
             

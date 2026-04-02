@@ -25,6 +25,8 @@ const SpeakingTest = () => {
   
   // View mode: saved audio from previous submission
   const [savedAudioUrl, setSavedAudioUrl] = useState(null);
+  const [result, setResult] = useState(null);
+  const [coachFeedback, setCoachFeedback] = useState(null);
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -77,6 +79,11 @@ const SpeakingTest = () => {
                   : latest.responses.user_audio_url;
                 setSavedAudioUrl(audioSrc);
               }
+              setResult({
+                score_normalized: latest.score,
+                evaluation: latest.responses?.evaluation || {}
+              });
+              setCoachFeedback(latest.responses?.coach_notes || null);
               if (!isViewMode) {
                 // Already submitted before — mark as submitted so they can't get double points
                 setSubmitted(true);
@@ -241,6 +248,48 @@ const SpeakingTest = () => {
                 <div className="w-full max-w-md">
                   <p className="text-sm text-slate-500 mb-3 text-center font-medium">Your recorded answer:</p>
                   <audio src={savedAudioUrl} controls className="w-full" />
+                </div>
+
+                <div className="w-full max-w-xl text-left">
+                  {/* Evaluation Results */}
+                  {result && result.evaluation?.estimated_band !== undefined && (
+                    <div className="mt-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                      <h3 className="text-xl font-bold text-slate-900 mb-4 flex items-center">
+                        <span className="bg-primary-500 w-2 h-6 rounded-full mr-3"></span>
+                        AI Evaluation
+                      </h3>
+                      
+                      <div className="bg-gradient-to-br from-primary-50 to-teal-50 p-6 rounded-2xl border border-primary-100 shadow-sm mb-6">
+                        <div className="flex items-center justify-between mb-4">
+                           <span className="text-primary-800 font-semibold tracking-wide uppercase text-sm">Estimated Band</span>
+                           <span className="text-3xl font-black text-primary-600">{result.evaluation.estimated_band.toFixed(1)}</span>
+                        </div>
+                        <p className="text-slate-700 leading-relaxed text-sm md:text-base">
+                          {result.evaluation.feedback}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        {Object.entries(result.evaluation.criteria_scores || {}).map(([crit, score]) => (
+                          <div key={crit} className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                            <span className="text-xs text-slate-500 font-medium tracking-wide uppercase mb-2">{crit}</span>
+                            <span className="text-xl font-bold text-slate-800">{Number(score).toFixed(1)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Coach Feedback */}
+                  {coachFeedback && (
+                    <div className="mt-8 bg-amber-50 rounded-2xl p-6 border border-amber-200 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
+                      <h4 className="font-bold text-amber-800 mb-3 flex items-center">
+                        <span className="text-xl mr-2">👨‍🏫</span>
+                        Coach's Note
+                      </h4>
+                      <p className="text-amber-900 leading-relaxed whitespace-pre-line">{coachFeedback}</p>
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-3">
                   <button
