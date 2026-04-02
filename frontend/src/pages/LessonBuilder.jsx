@@ -27,6 +27,7 @@ const LessonBuilder = () => {
   const [videoFile, setVideoFile] = useState(null);
   const [existingImageUrl, setExistingImageUrl] = useState('');
   const [existingVideoUrl, setExistingVideoUrl] = useState('');
+  const [existingAudioUrl, setExistingAudioUrl] = useState('');
   const [imageUrlInput, setImageUrlInput] = useState('');
   const [audioUrlInput, setAudioUrlInput] = useState('');
   const [videoUrlInput, setVideoUrlInput] = useState('');
@@ -58,6 +59,7 @@ const LessonBuilder = () => {
           setExistingVideoUrl(data.content?.video_url || '');
           if (data.content?.image_url && data.content.image_url.startsWith('http')) setImageUrlInput(data.content.image_url);
           if (data.content?.video_url && data.content.video_url.startsWith('http')) setVideoUrlInput(data.content.video_url);
+          setExistingAudioUrl(data.media_url || '');
           if (data.media_url && data.media_url.startsWith('http')) setAudioUrlInput(data.media_url);
           if (data.questions) setQuestions(data.questions);
         } else if (data.type === 'writing') {
@@ -131,8 +133,8 @@ const LessonBuilder = () => {
     setLoading(true);
 
     try {
-      // Audio: URL input takes priority, then file upload
-      let media_url = null;
+      // Audio: URL input takes priority, then file upload, then existing
+      let media_url = existingAudioUrl || null;
       if (audioUrlInput.trim()) {
         media_url = audioUrlInput.trim();
       } else if (lessonType === 'listening' && audioFile) {
@@ -344,6 +346,12 @@ const LessonBuilder = () => {
                 />
               </div>
               {audioFile && <p className="text-xs text-slate-500 mt-1">📎 {audioFile.name}</p>}
+              {!audioFile && !audioUrlInput && existingAudioUrl && (
+                <div className="mt-2">
+                  <p className="text-xs text-green-600 mb-1">✅ Current audio:</p>
+                  <audio controls src={existingAudioUrl.startsWith('http') ? existingAudioUrl : `${API_URL}${existingAudioUrl}`} className="w-full h-10" />
+                </div>
+              )}
               {audioUrlInput && <p className="text-xs text-blue-600 mt-1">🔗 Using URL</p>}
             </div>
             <div>
@@ -367,8 +375,12 @@ const LessonBuilder = () => {
                 />
               </div>
               {videoFile && <p className="text-xs text-slate-500 mt-1">📎 {videoFile.name}</p>}
+              {!videoFile && !videoUrlInput && existingVideoUrl && (
+                <div className="mt-2">
+                  <p className="text-xs text-green-600 mb-1">✅ Current video attached</p>
+                </div>
+              )}
               {videoUrlInput && <p className="text-xs text-blue-600 mt-1">🔗 Using URL</p>}
-              {!videoFile && !videoUrlInput && existingVideoUrl && <p className="text-xs text-green-600 mt-1">✅ Existing video attached</p>}
             </div>
           </div>
         )}
