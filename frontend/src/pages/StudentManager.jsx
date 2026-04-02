@@ -4,6 +4,7 @@ import { Users, Plus, Trash2, Edit3, X, Eye, ChevronDown, RefreshCw, Save, Spark
 import { useToast } from '../components/Toast';
 import API_URL from '../api';
 import ConfirmModal from '../components/ConfirmModal';
+import Avatar from '../components/Avatar';
 
 const StudentManager = () => {
   const [students, setStudents] = useState([]);
@@ -230,9 +231,7 @@ const StudentManager = () => {
                   <tr className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                     <td className="px-5 py-4">
                       <div className="flex items-center space-x-3">
-                        <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style={{ backgroundColor: s.avatar_color }}>
-                          {(s.full_name || s.username)[0].toUpperCase()}
-                        </div>
+                        <Avatar user={s} className="w-9 h-9 flex-shrink-0 text-sm" />
                         <div>
                           <p className="font-semibold text-slate-800 text-sm">{s.full_name || s.username}</p>
                           <p className="text-xs text-slate-400">@{s.username}</p>

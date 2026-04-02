@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Trophy, CheckCircle, Clock, ExternalLink, User } from 'lucide-react';
 import API_URL from '../api';
 import ConfirmModal from '../components/ConfirmModal';
+import Avatar from '../components/Avatar';
 
 const CoachReward = () => {
   const [requests, setRequests] = useState([]);
@@ -75,10 +76,7 @@ const CoachReward = () => {
               <div key={r.id} className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm"
-                      style={{ backgroundColor: r.avatar_color || '#0d9488' }}>
-                      {(r.full_name || r.username || 'U')[0].toUpperCase()}
-                    </div>
+                    <Avatar user={r} size="md" />
                     <div>
                       <p className="font-bold text-slate-800">{r.full_name || r.username}</p>
                       <p className="text-xs text-slate-500">{new Date(r.created_at).toLocaleString()}</p>
@@ -125,10 +123,7 @@ const CoachReward = () => {
             {completed.map(r => (
               <div key={r.id} className="flex items-center justify-between px-4 py-3 rounded-xl bg-green-50 border border-green-100">
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs"
-                    style={{ backgroundColor: r.avatar_color || '#0d9488' }}>
-                    {(r.full_name || r.username || 'U')[0].toUpperCase()}
-                  </div>
+                  <Avatar user={r} size="sm" />
                   <div>
                     <p className="font-semibold text-sm text-slate-800">{r.full_name || r.username}</p>
                     <p className="text-xs text-slate-500">{r.points} pts • {new Date(r.created_at).toLocaleDateString()}</p>

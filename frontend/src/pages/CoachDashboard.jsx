@@ -4,6 +4,7 @@ import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import { Users, HelpCircle, TrendingUp, BookOpen, ChevronRight, Plus } from 'lucide-react';
 import API_URL from '../api';
+import Avatar from '../components/Avatar';
 
 const CoachDashboard = () => {
   const { user } = useAuth();
@@ -70,9 +71,7 @@ const CoachDashboard = () => {
             {students.slice(0, 5).map(s => (
               <div key={s.id} onClick={() => navigate('/coach/students')} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 cursor-pointer transition-colors">
                 <div className="flex items-center space-x-3">
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: s.avatar_color }}>
-                    {(s.full_name || s.username)[0].toUpperCase()}
-                  </div>
+                  <Avatar user={s} className="w-9 h-9 text-sm" />
                   <div>
                     <p className="font-semibold text-slate-800 text-sm">{s.full_name || s.username}</p>
                     <p className="text-xs text-slate-500">{s.tests_completed} tests • {s.avg_score}% avg</p>

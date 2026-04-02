@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation, NavLink } from 'react-router-dom';
 import BottomNav from './BottomNav';
-import { NavLink } from 'react-router-dom';
-import { BookOpen, Home, Library, MessageCircle, Users, HelpCircle, LogOut, Send, FileEdit, X, Check, Edit3, Trophy } from 'lucide-react';
+import { BookOpen, Home, Library, MessageCircle, Users, HelpCircle, LogOut, Send, FileEdit, X, Check, Edit3, Trophy, Camera } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
 import API_URL from '../api';
@@ -19,7 +18,7 @@ const MainLayout = () => {
   const location = useLocation();
   const [unreadCount, setUnreadCount] = useState(0);
   const [showProfile, setShowProfile] = useState(false);
-  const [profileForm, setProfileForm] = useState({ full_name: '', email: '', avatar_color: '' });
+  const [profileForm, setProfileForm] = useState({ full_name: '', email: '', avatar_color: '', password: '' });
   const [saving, setSaving] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
@@ -53,6 +52,7 @@ const MainLayout = () => {
         full_name: user.full_name || '',
         email: user.email || '',
         avatar_color: user.avatar_color || '#0d9488',
+        password: ''
       });
     }
   }, [showProfile, user]);
@@ -61,7 +61,9 @@ const MainLayout = () => {
     if (!user) return;
     setSaving(true);
     try {
-      const res = await axios.put(`${API_URL}/auth/profile/${user.id}`, profileForm);
+      const payload = { ...profileForm };
+      if (!payload.password) delete payload.password;
+      const res = await axios.put(`${API_URL}/auth/profile/${user.id}`, payload);
       updateUser(res.data);
       setShowProfile(false);
     } catch (e) {
@@ -70,6 +72,27 @@ const MainLayout = () => {
       setSaving(false);
     }
   };
+
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      setSaving(true);
+      const res = await axios.post(`${API_URL}/upload/image`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setProfileForm(prev => ({ ...prev, avatar_color: res.data.url }));
+    } catch (err) {
+      alert('Failed to upload image');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const isUrl = (str) => typeof str === 'string' && (str.startsWith('http') || str.startsWith('/'));
+  const getAvatarUrl = (str) => str?.startsWith('/static') ? `${API_URL}${str}` : str;
 
   const studentNav = [
     { icon: Home, label: 'Dashboard', path: '/' },
@@ -142,14 +165,18 @@ const MainLayout = () => {
         {/* User Section — clickable to open profile */}
         <div className="p-4 border-t border-slate-200">
           <div 
-            className="flex items-center space-x-3 mb-3 px-2 cursor-pointer hover:bg-slate-50 rounded-xl py-2 transition-colors"
+            className="flex items-center space-x-3 mb-4 p-2 bg-slate-50 rounded-xl border border-slate-100 cursor-pointer hover:bg-slate-100 transition-colors"
             onClick={() => setShowProfile(true)}
             title="Edit Profile"
           >
-            <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm"
-              style={{ backgroundColor: user?.avatar_color || '#0d9488' }}>
-              {(user?.full_name || user?.username || 'U')[0].toUpperCase()}
-            </div>
+            {isUrl(user?.avatar_color) ? (
+              <img src={getAvatarUrl(user.avatar_color)} alt="Avatar" className="w-10 h-10 rounded-full object-cover shadow-sm shrink-0" />
+            ) : (
+              <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm"
+                style={{ backgroundColor: user?.avatar_color || '#0d9488' }}>
+                {(user?.full_name || user?.username || 'U')[0].toUpperCase()}
+              </div>
+            )}
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-sm text-slate-800 truncate">{user?.full_name || user?.username}</p>
               <p className="text-xs text-slate-400 capitalize">{user?.role}</p>
@@ -169,13 +196,22 @@ const MainLayout = () => {
           SIT<span className="text-primary-500">.</span>
         </h1>
         <div className="relative">
-          <button 
-            onClick={() => setShowMobileMenu(prev => !prev)}
-            className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-md"
-            style={{ backgroundColor: user?.avatar_color || '#0d9488' }}
-          >
-            {(user?.full_name || user?.username || 'U')[0].toUpperCase()}
-          </button>
+          {isUrl(user?.avatar_color) ? (
+            <img 
+              onClick={() => setShowMobileMenu(prev => !prev)}
+              src={getAvatarUrl(user.avatar_color)} 
+              alt="Avatar" 
+              className="w-9 h-9 rounded-full object-cover shadow-md cursor-pointer" 
+            />
+          ) : (
+            <button 
+              onClick={() => setShowMobileMenu(prev => !prev)}
+              className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-md"
+              style={{ backgroundColor: user?.avatar_color || '#0d9488' }}
+            >
+              {(user?.full_name || user?.username || 'U')[0].toUpperCase()}
+            </button>
+          )}
           {showMobileMenu && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setShowMobileMenu(false)} />
@@ -226,17 +262,34 @@ const MainLayout = () => {
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               {/* Avatar Preview + Color Picker */}
               <div className="flex flex-col items-center">
-                <div 
-                  className="w-20 h-20 rounded-full flex items-center justify-center text-white font-bold text-2xl mb-4 shadow-lg transition-colors"
-                  style={{ backgroundColor: profileForm.avatar_color }}
-                >
-                  {(profileForm.full_name || user?.username || 'U')[0].toUpperCase()}
+                <div className="relative mb-4 group cursor-pointer">
+                  {isUrl(profileForm.avatar_color) ? (
+                    <img 
+                      src={getAvatarUrl(profileForm.avatar_color)} 
+                      alt="Avatar" 
+                      className="w-24 h-24 rounded-full object-cover shadow-lg border-4 border-white"
+                    />
+                  ) : (
+                    <div 
+                      className="w-24 h-24 rounded-full flex items-center justify-center text-white font-bold text-3xl shadow-lg border-4 border-white transition-colors"
+                      style={{ backgroundColor: profileForm.avatar_color || '#0d9488' }}
+                    >
+                      {(profileForm.full_name || user?.username || 'U')[0].toUpperCase()}
+                    </div>
+                  )}
+                  {/* Upload Overlay */}
+                  <label className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                     <Camera size={24} className="mb-1" />
+                     <span className="text-[10px] font-bold uppercase tracking-wider">Change</span>
+                     <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} disabled={saving} />
+                  </label>
                 </div>
-                <p className="text-sm text-slate-500 mb-3">Choose avatar color</p>
-                <div className="flex flex-wrap justify-center gap-2">
+
+                <p className="text-sm font-semibold text-slate-700 mb-2">Or choose a color</p>
+                <div className="flex flex-wrap justify-center gap-2 max-w-[200px]">
                   {AVATAR_COLORS.map(color => (
                     <button
                       key={color}
@@ -277,6 +330,18 @@ const MainLayout = () => {
                   onChange={e => setProfileForm(prev => ({ ...prev, email: e.target.value }))}
                   className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-sm"
                   placeholder="your@email.com"
+                />
+              </div>
+
+              {/* Password */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">New Password</label>
+                <input
+                  type="password"
+                  value={profileForm.password}
+                  onChange={e => setProfileForm(prev => ({ ...prev, password: e.target.value }))}
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-sm"
+                  placeholder="Leave blank to keep current password"
                 />
               </div>
 

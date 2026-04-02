@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Send, ArrowLeft, Users, Loader2, Check, CheckCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import API_URL from '../api';
+import Avatar from '../components/Avatar';
 
 // Relative time formatter like Messenger
 const timeAgo = (isoString) => {
@@ -274,9 +275,7 @@ const CoachChat = () => {
                 <button key={c.user_id} onClick={() => setSelectedUserId(c.user_id)}
                   className={`w-full flex items-center space-x-3 p-3 hover:bg-slate-100 transition-colors text-left ${selectedUserId === c.user_id ? 'bg-primary-50 border-r-2 border-primary-500' : ''}`}>
                   <div className="relative flex-shrink-0">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: c.avatar_color || '#0d9488' }}>
-                      {(c.full_name || c.username)[0].toUpperCase()}
-                    </div>
+                    <Avatar user={c} size="md" />
                     <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${isOnline ? 'bg-green-500' : 'bg-slate-300'}`} />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -302,9 +301,7 @@ const CoachChat = () => {
                 {selectedUser && (
                   <>
                     <div className="relative">
-                      <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: selectedUser.avatar_color || '#0d9488' }}>
-                        {(selectedUser.full_name || selectedUser.username)[0].toUpperCase()}
-                      </div>
+                      <Avatar user={selectedUser} className="w-9 h-9 text-sm" />
                       <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white ${onlineStatus[String(selectedUserId)]?.online ? 'bg-green-500' : 'bg-slate-300'}`} />
                     </div>
                     <div>
