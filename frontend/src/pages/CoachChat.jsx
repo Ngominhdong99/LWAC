@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
-import { Send, ArrowLeft, Users, Loader2, Check, CheckCheck } from 'lucide-react';
+import { Send, ArrowLeft, Users, Loader2, Check, CheckCheck, Image as ImageIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import API_URL from '../api';
 import Avatar from '../components/Avatar';
@@ -20,12 +20,20 @@ const timeAgo = (isoString) => {
   return `Active ${Math.floor(diff / 86400)}d ago`;
 };
 
-// Format UTC timestamp to local time
 const formatTime = (utcString) => {
   if (!utcString) return '';
   // Ensure UTC interpretation: append Z if not present
   const ts = utcString.endsWith('Z') ? utcString : utcString + 'Z';
-  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const dateObj = new Date(ts);
+  const today = new Date();
+  
+  // If it's today, just show time. If older, show Date + Time
+  if (dateObj.toDateString() === today.toDateString()) {
+    return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } else {
+    // Return e.g. "Oct 5, 10:30 AM" or "05/10/2026 10:30"
+    return dateObj.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
 };
 
 const CoachChat = () => {
@@ -241,6 +249,54 @@ const CoachChat = () => {
     }
   };
 
+  const uploadAndSendImage = async (file) => {
+    if (!selectedUserId || !user) return;
+    setSending(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await axios.post(`${API_URL}/upload/image`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      const imageUrl = res.data.url;
+      await axios.post(`${API_URL}/chat/send`, {
+        sender_id: user.id, receiver_id: selectedUserId, message: `[IMAGE]${imageUrl}`
+      });
+      const [msgRes] = await Promise.all([
+        axios.get(`${API_URL}/chat/history/${user.id}/${selectedUserId}?limit=30`),
+        fetchConversations(),
+      ]);
+      setMessages(msgRes.data);
+    } catch (err) {
+      console.error("Failed to upload image", err);
+    } finally {
+      setSending(false);
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  };
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await uploadAndSendImage(file);
+    e.target.value = null; // reset
+  };
+  
+  const handlePaste = async (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+       if (items[i].type.indexOf('image') !== -1) {
+          const file = items[i].getAsFile();
+          if (file) {
+             e.preventDefault();
+             await uploadAndSendImage(file);
+             break;
+          }
+       }
+    }
+  };
+
   // Message status icon
   const MessageStatus = ({ msg }) => {
     if (msg.sender_id !== user.id) return null; // only show for sent messages
@@ -335,7 +391,16 @@ const CoachChat = () => {
                         ? 'bg-primary-600 text-white rounded-br-none'
                         : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none'
                     }`}>
-                      <p className="leading-relaxed">{msg.message}</p>
+                      {msg.message.startsWith('[IMAGE]') ? (
+                        <img 
+                          src={msg.message.replace('[IMAGE]', '').startsWith('/static') ? `${API_URL}${msg.message.replace('[IMAGE]', '')}` : msg.message.replace('[IMAGE]', '')} 
+                          alt="Attachment" 
+                          className="max-w-full rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={() => window.open(msg.message.replace('[IMAGE]', '').startsWith('/static') ? `${API_URL}${msg.message.replace('[IMAGE]', '')}` : msg.message.replace('[IMAGE]', ''), '_blank')}
+                        />
+                      ) : (
+                        <p className="leading-relaxed whitespace-pre-wrap">{msg.message}</p>
+                      )}
                     </div>
                     <div className="flex items-center space-x-1 mt-1 px-1">
                       <span className="text-xs text-slate-400">
@@ -361,12 +426,16 @@ const CoachChat = () => {
               </div>
 
               {/* Input */}
-              <form onSubmit={handleSend} className="p-3 bg-white border-t border-slate-200 flex space-x-2">
-                <input ref={inputRef} type="text" value={inputMsg} onChange={handleInputChange}
-                  placeholder="Type a message..." disabled={sending} autoFocus
+              <form onSubmit={handleSend} className="p-3 bg-white border-t border-slate-200 flex items-center space-x-2">
+                <label className={`p-2 text-slate-400 hover:text-primary-600 transition-colors cursor-pointer rounded-xl hover:bg-slate-100 flex-shrink-0 ${sending ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <ImageIcon size={22} />
+                  <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={sending} />
+                </label>
+                <input ref={inputRef} onPaste={handlePaste} type="text" value={inputMsg} onChange={handleInputChange}
+                  placeholder="Type a message or paste an image..." disabled={sending} autoFocus
                   className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
                 <button type="submit" disabled={!inputMsg.trim() || sending}
-                  className={`p-2.5 rounded-xl transition-colors ${!inputMsg.trim() || sending ? 'bg-slate-100 text-slate-400' : 'bg-primary-600 text-white hover:bg-primary-700'}`}>
+                  className={`p-2.5 rounded-xl transition-colors flex-shrink-0 ${!inputMsg.trim() || sending ? 'bg-slate-100 text-slate-400' : 'bg-primary-600 text-white hover:bg-primary-700'}`}>
                   {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
                 </button>
               </form>
