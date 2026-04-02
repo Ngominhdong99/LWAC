@@ -532,6 +532,15 @@ const LessonBuilder = () => {
                       <p className="text-slate-500 text-sm">No questions added yet. Click &quot;Add Question&quot; to begin.</p>
                   </div>
               )}
+              
+              {questions.length > 0 && (
+                <button 
+                  onClick={handleAddQuestion}
+                  className="mt-2 flex items-center justify-center w-full space-x-2 text-sm bg-slate-50 border-2 border-dashed border-slate-200 hover:border-primary-400 hover:bg-primary-50 hover:text-primary-700 text-slate-600 px-4 py-4 rounded-xl transition-all font-bold"
+                >
+                  <Plus size={20} /> <span className="text-base">Add Another Question</span>
+                </button>
+              )}
             </div>
           </div>
         )}
