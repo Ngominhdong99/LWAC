@@ -75,6 +75,7 @@ const ListeningTest = () => {
                 return acc;
               }, 0);
               setResult({ score: latest.score, correct: correctCount, total: questions.length });
+              setCoachFeedback(latest.responses?.coach_notes || null);
               setShowTranscript(true);
             }
           } catch (e) { console.error('Failed to load result for view mode', e); }

@@ -93,6 +93,7 @@ const ReadingTest = () => {
                 return acc;
               }, 0);
               setResult({ score: latest.score, correct: correctCount, total: questions.length });
+              setCoachFeedback(latest.responses?.coach_notes || null);
             }
           } catch (e) { console.error('Failed to load result for view mode', e); }
         } else if (!isViewMode && user) {

@@ -57,7 +57,7 @@ const WritingTest = () => {
                 score_normalized: latest.score,
                 evaluation: latest.responses?.evaluation || {}
               });
-              setCoachFeedback(latest.responses?.coach_notes || null);
+              setCoachFeedback(latest.responses?.feedback || []);
             }
           } catch (e) { console.error('Failed to load result for view mode', e); }
         } else if (!isViewMode) {
@@ -307,13 +307,22 @@ const WritingTest = () => {
             )}
 
             {/* Coach Feedback */}
-            {coachFeedback && (
+            {coachFeedback && coachFeedback.length > 0 && (
               <div className="mt-8 bg-amber-50 rounded-2xl p-6 border border-amber-200 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <h4 className="font-bold text-amber-800 mb-3 flex items-center">
+                <h4 className="font-bold text-amber-800 mb-4 flex items-center">
                   <span className="text-xl mr-2">👨‍🏫</span>
-                  Coach's Note
+                  Coach's Feedback
                 </h4>
-                <p className="text-amber-900 leading-relaxed whitespace-pre-line">{coachFeedback}</p>
+                <div className="space-y-4">
+                  {coachFeedback.map((fb, idx) => (
+                    <div key={idx} className="bg-white/60 p-4 rounded-xl border border-amber-100">
+                      {fb.quote && fb.quote !== 'General comment' && (
+                        <p className="italic text-slate-500 mb-2 border-l-2 border-amber-300 pl-3">"{fb.quote}"</p>
+                      )}
+                      <p className="text-amber-900 leading-relaxed whitespace-pre-wrap">{fb.comment}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
             
