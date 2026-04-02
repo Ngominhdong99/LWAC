@@ -101,7 +101,7 @@ const ReadingTest = () => {
           try {
             const [resResults, resAssignments] = await Promise.all([
               axios.get(`${API_URL}/results/${user.id}`),
-              axios.get(`${API_URL}/users/${user.id}/assignments`)
+              axios.get(`${API_URL}/coach/students/${user.id}/assignments`)
             ]);
             
             const lessonAssignment = resAssignments.data.find(a => a.lesson_id === parseInt(id));

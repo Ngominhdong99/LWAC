@@ -60,13 +60,48 @@ const WritingTest = () => {
               setCoachFeedback(latest.responses?.feedback || []);
             }
           } catch (e) { console.error('Failed to load result for view mode', e); }
-        } else if (!isViewMode) {
-          // Restore from localStorage
+        } else if (!isViewMode && user) {
+          // Check if already submitted securely
           try {
-            const saved = localStorage.getItem(storageKey);
-            if (saved) setEssay(saved);
-          } catch (e) { /* ignore */ }
+            const [resResults, resAssignments] = await Promise.all([
+              axios.get(`${API_URL}/results/${user.id}`),
+              axios.get(`${API_URL}/coach/students/${user.id}/assignments`)
+            ]);
+            
+            const lessonAssignment = resAssignments.data.find(a => a.lesson_id === parseInt(id));
+            const isRetakeAllowed = lessonAssignment?.allow_retake === true;
+
+            const lessonResults = resResults.data.filter(r => r.lesson_id === parseInt(id));
+            
+            if (lessonResults.length > 0 && !isRetakeAllowed) {
+              // Force View Mode
+              const latest = lessonResults[lessonResults.length - 1];
+              if (latest.responses?.user_essay) {
+                setEssay(latest.responses.user_essay);
+              }
+              setResult({
+                score_normalized: latest.score,
+                evaluation: latest.responses?.evaluation || {}
+              });
+              setCoachFeedback(latest.responses?.feedback || []);
+              localStorage.removeItem(storageKey);
+            } else {
+              // Restore from localStorage
+              try {
+                const saved = localStorage.getItem(storageKey);
+                if (saved) setEssay(saved);
+              } catch (e) { /* ignore */ }
+            }
+          } catch (e) {
+             console.error("Failed assigning verification", e);
+             // Fallback to local storage if API fails
+             try {
+                const saved = localStorage.getItem(storageKey);
+                if (saved) setEssay(saved);
+             } catch (e) { /* ignore */ }
+          }
         }
+
       } catch (error) {
         console.error("Failed to load lesson", error);
       } finally {

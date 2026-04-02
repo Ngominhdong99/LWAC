@@ -69,24 +69,37 @@ const SpeakingTest = () => {
         // View mode or check if already submitted: load previous result
         if (user) {
           try {
-            const resResults = await axios.get(`${API_URL}/results/${user.id}`);
+            const [resResults, resAssignments] = await Promise.all([
+              axios.get(`${API_URL}/results/${user.id}`),
+              axios.get(`${API_URL}/coach/students/${user.id}/assignments`)
+            ]);
+            
+            const lessonAssignment = resAssignments.data.find(a => a.lesson_id === parseInt(id));
+            const isRetakeAllowed = lessonAssignment?.allow_retake === true;
+            
             const lessonResults = resResults.data.filter(r => r.lesson_id === parseInt(id));
             if (lessonResults.length > 0) {
               const latest = lessonResults[lessonResults.length - 1];
-              if (latest.responses?.user_audio_url) {
-                const audioSrc = latest.responses.user_audio_url.startsWith('/static')
-                  ? `${API_URL}${latest.responses.user_audio_url}`
-                  : latest.responses.user_audio_url;
-                setSavedAudioUrl(audioSrc);
-              }
-              setResult({
-                score_normalized: latest.score,
-                evaluation: latest.responses?.evaluation || {}
-              });
-              setCoachFeedback(latest.responses?.feedback || []);
-              if (!isViewMode) {
-                // Already submitted before — mark as submitted so they can't get double points
-                setSubmitted(true);
+              if (!isViewMode && isRetakeAllowed) {
+                 // Do not load results blocking the UI; let them retake
+                 // We don't set submitted to true.
+              } else {
+                // Force view mode if not rectake allowed, or naturally in view mode
+                if (latest.responses?.user_audio_url) {
+                  const audioSrc = latest.responses.user_audio_url.startsWith('/static')
+                    ? `${API_URL}${latest.responses.user_audio_url}`
+                    : latest.responses.user_audio_url;
+                  setSavedAudioUrl(audioSrc);
+                }
+                setResult({
+                  score_normalized: latest.score,
+                  evaluation: latest.responses?.evaluation || {}
+                });
+                setCoachFeedback(latest.responses?.feedback || []);
+                if (!isViewMode) {
+                  // Already submitted before and not allowed to retake — mark as submitted so they can't get double points
+                  setSubmitted(true);
+                }
               }
             }
           } catch (e) { console.error('Failed to load previous result', e); }

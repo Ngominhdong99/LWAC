@@ -21,24 +21,38 @@ def create_result(user_id: int, result: schemas.ResultCreate, db: Session = Depe
     db_user = db.query(models.User).filter(models.User.id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
-        
-    db_result = models.Result(**result.dict(), user_id=user_id)
-    db.add(db_result)
-    db.commit()
-    db.refresh(db_result)
-    
-    # Update assignment for this lesson (pending or completed for retakes)
     from datetime import datetime
+    
     assignment = db.query(models.Assignment).filter(
         models.Assignment.student_id == user_id,
         models.Assignment.lesson_id == result.lesson_id
     ).first()
     
     if assignment:
+        if assignment.status == "completed" and not assignment.allow_retake:
+            raise HTTPException(status_code=400, detail="Assignment already completed. Retake not allowed.")
+            
         assignment.status = "completed"
         assignment.completed_at = datetime.utcnow()
-        assignment.result_id = db_result.id
         assignment.allow_retake = False
+        # result_id is set below after creating the result
+    else:
+        # If no assignment, still check if they already submitted this lesson to prevent spamming
+        existing_result = db.query(models.Result).filter(
+            models.Result.user_id == user_id,
+            models.Result.lesson_id == result.lesson_id
+        ).first()
+        if existing_result:
+             # Just an extra protection since they have no assignment allowing a retake
+             raise HTTPException(status_code=400, detail="Lesson already completed. Retake not allowed without coach permission.")
+
+    db_result = models.Result(**result.dict(), user_id=user_id)
+    db.add(db_result)
+    db.commit()
+    db.refresh(db_result)
+    
+    if assignment:
+        assignment.result_id = db_result.id
         db.commit()
     
     # Award reward points
@@ -62,15 +76,22 @@ def create_result(user_id: int, result: schemas.ResultCreate, db: Session = Depe
             reason = f"{lesson.type.capitalize()} submission"
         
         if points > 0:
-            rp = models.RewardPoint(
-                user_id=user_id,
-                lesson_id=lesson.id,
-                result_id=db_result.id,
-                points=points,
-                reason=reason
-            )
-            db.add(rp)
-            db.commit()
+            # Prevent Point Farming: Check if user already got points for this lesson
+            already_rewarded = db.query(models.RewardPoint).filter(
+                models.RewardPoint.user_id == user_id,
+                models.RewardPoint.lesson_id == lesson.id
+            ).first()
+            
+            if not already_rewarded:
+                rp = models.RewardPoint(
+                    user_id=user_id,
+                    lesson_id=lesson.id,
+                    result_id=db_result.id,
+                    points=points,
+                    reason=reason
+                )
+                db.add(rp)
+                db.commit()
         
     return db_result
 
