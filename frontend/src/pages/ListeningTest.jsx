@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/Toast';
+import MarkdownRenderer from '../components/MarkdownRenderer';
 import { ArrowLeft, ArrowRight, Play, Pause, RotateCcw, CheckCircle, Headphones, Volume2 } from 'lucide-react';
 import API_URL from '../api';
 import { speakNatural, cancelSpeech } from '../utils/tts';
@@ -457,7 +458,9 @@ const ListeningTest = () => {
                   <Volume2 size={16} />
                   <span>Transcript</span>
                 </h4>
-                <p className="text-slate-600 leading-relaxed text-sm italic">{lesson.content.transcript}</p>
+                <div className="text-slate-600 text-sm italic">
+                  <MarkdownRenderer>{lesson.content.transcript}</MarkdownRenderer>
+                </div>
               </div>
             )}
 

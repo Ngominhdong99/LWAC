@@ -258,9 +258,9 @@ const WritingTest = () => {
             
             <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 shadow-sm">
                 <h2 className="text-xl md:text-2xl font-bold text-slate-900 mb-4 leading-tight">Prompt</h2>
-                <p className="text-slate-700 text-base md:text-lg leading-relaxed font-medium">
-                {prompt}
-                </p>
+                <div className="text-slate-700 text-base md:text-lg leading-relaxed font-medium">
+                  <MarkdownRenderer>{prompt}</MarkdownRenderer>
+                </div>
                 {tips.length > 0 && (
                 <div className="mt-6 pt-4 border-t border-slate-200">
                     <ul className="list-disc list-inside text-sm text-slate-500 space-y-2">

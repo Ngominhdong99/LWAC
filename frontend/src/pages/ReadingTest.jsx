@@ -5,6 +5,7 @@ import AskTeacherPopup from '../components/AskTeacherPopup';
 import { ArrowLeft, ArrowRight, Clock, CheckCircle, Plus, HelpCircle, Volume2, Check } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/Toast';
+import MarkdownRenderer from '../components/MarkdownRenderer';
 import API_URL from '../api';
 import { speakNatural } from '../utils/tts';
 import { lookupWord } from '../utils/dictionary';
@@ -405,15 +406,13 @@ const ReadingTest = () => {
                 />
               </div>
             )}
-            <div className="space-y-6 text-slate-700 text-base md:text-lg leading-relaxed font-serif selection:bg-primary-200 selection:text-primary-900">
+            <div className="space-y-6 text-slate-700 text-base md:text-lg leading-relaxed font-serif selection:bg-primary-200 selection:text-primary-900 select-text">
               {lesson.content.paragraphs ? (
                 lesson.content.paragraphs.map(p => (
                   <p key={p.id} className="text-justify select-text">{p.text}</p>
                 ))
               ) : lesson.content.passage ? (
-                lesson.content.passage.split('\n\n').filter(Boolean).map((text, i) => (
-                  <p key={i} className="text-justify select-text">{text}</p>
-                ))
+                <MarkdownRenderer>{lesson.content.passage}</MarkdownRenderer>
               ) : null}
             </div>
           </div>
