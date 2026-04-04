@@ -474,11 +474,63 @@ const ListeningTest = () => {
           <div className="max-w-xl mx-auto space-y-6 pb-24">
             <h3 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2">Questions 1-{lesson.questions.length}</h3>
 
-            {lesson.questions.map((q, idx) => (
+            {lesson.questions.map((q, idx) => {
+              const hasInlineBlanks = (q.type === 'fill_blank' || q.type === 'written_answer') && /(_{2,}|\.{3,})/.test(q.question_text || '');
+              
+              const renderInlineText = () => {
+                if (!hasInlineBlanks) return q.question_text;
+                
+                const parts = (q.question_text || '').split(/(_{2,}|\.{3,})/g);
+                let blankIndex = 0;
+                const blankCount = getBlankCount(q.correct_answer);
+                const correctParts = (q.correct_answer || '').split(';').map(p => p.trim());
+
+                return parts.map((part, bIdx) => {
+                  if (/^_{2,}$|^\.{3,}$/.test(part)) {
+                    const currentBIdx = blankIndex++;
+                    const userVal = getBlankAnswerPart(fillAnswers[q.id], currentBIdx);
+                    const correctPart = correctParts[currentBIdx] || '';
+                    
+                    const isBlankCorrect = result !== null && checkSingleBlank(userVal, correctPart);
+                    const isBlankWrong = result !== null && !checkSingleBlank(userVal, correctPart);
+                    
+                    let inputCls = 'inline-block mx-1 px-2 py-1 border-b-2 bg-transparent focus:bg-slate-50 focus:outline-none transition-all w-28 md:w-36 text-center disabled:opacity-100';
+                    if (result !== null) {
+                      if (isBlankCorrect) inputCls += ' border-green-500 text-green-700 bg-green-50/50';
+                      else inputCls += ' border-red-500 text-red-700 bg-red-50/50 line-through decoration-red-400';
+                    } else {
+                      inputCls += ' border-slate-300 focus:border-amber-500 text-amber-700 font-semibold';
+                    }
+
+                    return (
+                      <span key={bIdx} className="relative inline-flex items-center">
+                        <input
+                          type="text"
+                          value={userVal}
+                          disabled={result !== null}
+                          onChange={(e) => {
+                            const newVal = setBlankAnswerPart(fillAnswers[q.id] || '', currentBIdx, e.target.value, blankCount);
+                            handleFillChange(q.id, newVal);
+                          }}
+                          className={inputCls}
+                        />
+                        {isBlankWrong && (
+                          <span className="text-red-600 font-bold text-xs ml-1 bg-red-50 px-1.5 py-0.5 rounded-md whitespace-nowrap">
+                            ✓ {correctPart.split('|').map(a => a.trim()).join(' / ')}
+                          </span>
+                        )}
+                      </span>
+                    );
+                  }
+                  return <span key={bIdx}>{part}</span>;
+                });
+              };
+
+              return (
               <div key={q.id} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 transition-all hover:border-amber-200">
-                <p className="font-semibold text-slate-800 mb-4 flex">
-                  <span className="bg-amber-50 text-amber-600 w-6 h-6 rounded-full flex items-center justify-center text-xs mr-3 flex-shrink-0">{idx + 1}</span>
-                  {q.question_text}
+                <p className="font-semibold text-slate-800 mb-4 flex leading-loose">
+                  <span className="bg-amber-50 text-amber-600 w-6 h-6 rounded-full flex items-center justify-center text-xs mr-3 flex-shrink-0 mt-1">{idx + 1}</span>
+                  <span className="flex-1">{renderInlineText()}</span>
                 </p>
 
                 {q.type === 'multiple_choice' && q.options && (
@@ -510,7 +562,7 @@ const ListeningTest = () => {
                   </div>
                 )}
 
-                {(q.type === 'fill_blank' || q.type === 'written_answer') && (() => {
+                {!hasInlineBlanks && (q.type === 'fill_blank' || q.type === 'written_answer') && (() => {
                   const blankCount = getBlankCount(q.correct_answer);
                   const isMultiBlank = blankCount > 1;
                   const correctParts = (q.correct_answer || '').split(';').map(p => p.trim());
@@ -598,7 +650,8 @@ const ListeningTest = () => {
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Bottom Action Bar */}
