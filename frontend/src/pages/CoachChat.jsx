@@ -7,6 +7,7 @@ import { useToast } from '../components/Toast';
 import { useNavigate } from 'react-router-dom';
 import API_URL from '../api';
 import Avatar from '../components/Avatar';
+import ConfirmModal from '../components/ConfirmModal';
 
 // Relative time formatter like Messenger
 const timeAgo = (isoString) => {
@@ -48,6 +49,7 @@ const CoachChat = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [inputMsg, setInputMsg] = useState('');
   const [pendingImage, setPendingImage] = useState(null);
+  const [deleteMsgId, setDeleteMsgId] = useState(null);
   const [sending, setSending] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -274,6 +276,7 @@ const CoachChat = () => {
     try {
       await axios.delete(`${API_URL}/chat/message/${msgId}?user_id=${user.id}`);
       setMessages(prev => prev.filter(m => m.id !== msgId));
+      setDeleteMsgId(null);
       // Re-fetch conversations to update the last_message just in case
       fetchConversations();
     } catch (err) {
@@ -323,7 +326,17 @@ const CoachChat = () => {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] md:h-screen bg-secondary p-4 md:p-6 max-w-6xl mx-auto w-full">
+    <>
+      <ConfirmModal 
+        isOpen={deleteMsgId !== null}
+        onClose={() => setDeleteMsgId(null)}
+        onConfirm={() => handleDeleteMessage(deleteMsgId)}
+        title="Delete Message"
+        message="Are you sure you want to delete this message? This action cannot be undone."
+        confirmText="Delete"
+        isDestructive={true}
+      />
+      <div className="flex flex-col h-[calc(100vh-64px)] md:h-screen bg-secondary p-4 md:p-6 max-w-6xl mx-auto w-full">
       <header className="mb-4">
         <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Chat</h1>
         <p className="text-slate-500 text-sm">Message {user?.role === 'coach' ? 'your students' : 'your coach'} directly</p>
@@ -421,7 +434,7 @@ const CoachChat = () => {
                     <div className={`flex items-center space-x-2 mt-1 px-1 ${msg.sender_id === user.id ? 'justify-end' : ''}`}>
                       {msg.sender_id === user.id && !msg.is_read && (
                         <button 
-                          onClick={() => handleDeleteMessage(msg.id)}
+                          onClick={() => setDeleteMsgId(msg.id)}
                           className="text-slate-300 hover:text-red-500 transition-colors"
                           title="Delete this message"
                         >
@@ -487,6 +500,7 @@ const CoachChat = () => {
         </div>
       </div>
     </div>
+    </>
   );
 };
 
