@@ -694,20 +694,45 @@ const StudentManager = () => {
                              </div>
                             );
                           })
-                        ) : (
-                          <div className="space-y-3">
-                            <div className={`p-4 rounded-xl border ${isCorrect ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
-                              <span className="block text-xs uppercase tracking-wider font-bold opacity-60 mb-1">Student's Answer</span>
-                              <span className="font-medium text-base">{studentAns || <span className="text-slate-400 italic font-normal">No answer provided</span>}</span>
+                        ) : (() => {
+                          const correctParts = (q.correct_answer || '').split(';').map(p => p.trim());
+                          const isMultiBlank = correctParts.length > 1;
+                          const userParts = isMultiBlank ? (studentAns || '').split(';;') : [studentAns || ''];
+                          
+                          return (
+                            <div className="space-y-3">
+                              {isMultiBlank ? (
+                                correctParts.map((cp, bIdx) => {
+                                  const userVal = (userParts[bIdx] || '').trim();
+                                  const accepted = cp.split('|').map(a => a.trim().toLowerCase());
+                                  const blankCorrect = accepted.some(a => a === userVal.toLowerCase());
+                                  return (
+                                    <div key={bIdx} className={`p-3 rounded-xl border ${blankCorrect ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                                      <span className="block text-xs uppercase tracking-wider font-bold opacity-60 mb-1">Blank {bIdx + 1}</span>
+                                      <span className={`font-medium ${blankCorrect ? 'text-green-800' : 'text-red-800'}`}>{userVal || <span className="text-slate-400 italic font-normal">No answer</span>}</span>
+                                      {!blankCorrect && (
+                                        <span className="block text-sm text-green-600 mt-1">Correct: {cp.split('|').map(a => a.trim()).join(' / ')}</span>
+                                      )}
+                                    </div>
+                                  );
+                                })
+                              ) : (
+                                <>
+                                  <div className={`p-4 rounded-xl border ${isCorrect ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+                                    <span className="block text-xs uppercase tracking-wider font-bold opacity-60 mb-1">Student's Answer</span>
+                                    <span className="font-medium text-base">{studentAns || <span className="text-slate-400 italic font-normal">No answer provided</span>}</span>
+                                  </div>
+                                  {!isCorrect && (
+                                    <div className="p-4 rounded-xl border bg-green-50 border-green-200 text-green-800">
+                                      <span className="block text-xs uppercase tracking-wider font-bold opacity-60 mb-1">Correct Answer</span>
+                                      <span className="font-medium text-base">{q.correct_answer.split('|').map(a => a.trim()).join(' / ')}</span>
+                                    </div>
+                                  )}
+                                </>
+                              )}
                             </div>
-                            {!isCorrect && (
-                              <div className="p-4 rounded-xl border bg-green-50 border-green-200 text-green-800">
-                                <span className="block text-xs uppercase tracking-wider font-bold opacity-60 mb-1">Correct Answer</span>
-                                <span className="font-medium text-base">{q.correct_answer}</span>
-                              </div>
-                            )}
-                          </div>
-                        )}
+                          );
+                        })()}
 
                         {/* AI Explain + Coach Note */}
                         <div className="pt-3 border-t border-slate-100 mt-3 space-y-3">

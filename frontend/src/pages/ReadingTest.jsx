@@ -27,11 +27,39 @@ const VOCAB_MAP = {
 };
 
 // Check if user's answer matches any accepted correct answer (supports pipe-separated alternatives)
-const checkWrittenAnswer = (userAnswer, correctAnswer) => {
+const checkSingleBlank = (userAnswer, correctAnswer) => {
   const trimmed = (userAnswer || '').trim().toLowerCase();
   if (!trimmed) return false;
   const acceptedAnswers = (correctAnswer || '').split('|').map(a => a.trim().toLowerCase());
   return acceptedAnswers.some(a => a === trimmed);
+};
+
+// Multi-blank: correct_answer uses ; to separate blanks, | for alternatives within each blank
+// e.g. "doesn't eat|does not eat ; make"
+const getBlankCount = (correctAnswer) => {
+  if (!correctAnswer) return 1;
+  return correctAnswer.split(';').length;
+};
+
+const checkWrittenAnswer = (userAnswer, correctAnswer) => {
+  const blankCount = getBlankCount(correctAnswer);
+  if (blankCount === 1) return checkSingleBlank(userAnswer, correctAnswer);
+  // Multi-blank: userAnswer stored as "ans1;;ans2;;ans3"
+  const parts = (correctAnswer || '').split(';');
+  const userParts = (userAnswer || '').split(';;');
+  return parts.every((part, i) => checkSingleBlank(userParts[i] || '', part));
+};
+
+const getBlankAnswerPart = (fillAnswer, blankIndex) => {
+  const parts = (fillAnswer || '').split(';;');
+  return parts[blankIndex] || '';
+};
+
+const setBlankAnswerPart = (fillAnswer, blankIndex, value, totalBlanks) => {
+  const parts = (fillAnswer || '').split(';;');
+  while (parts.length < totalBlanks) parts.push('');
+  parts[blankIndex] = value;
+  return parts.join(';;');
 };
 
 const ReadingTest = () => {
@@ -481,44 +509,84 @@ const ReadingTest = () => {
                   </div>
                 )}
 
-                {(q.type === 'fill_blank' || q.type === 'written_answer') && (
-                  <div className="pl-9 mt-2">
-                    {q.type === 'written_answer' ? (
-                      <textarea
-                        placeholder="Type your answer here..."
-                        rows={3}
-                        value={fillAnswers[q.id] || ''}
-                        onChange={(e) => handleFillChange(q.id, e.target.value)}
-                        disabled={result !== null}
-                        className={`w-full px-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 resize-y ${
-                          result !== null
-                            ? checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer)
-                              ? 'border-green-500 bg-green-50 text-green-800'
-                              : 'border-red-500 bg-red-50 text-red-800'
-                            : 'border-slate-200 bg-white'
-                        }`}
-                      />
-                    ) : (
-                      <input
-                        type="text"
-                        placeholder="Type your answer..."
-                        value={fillAnswers[q.id] || ''}
-                        onChange={(e) => handleFillChange(q.id, e.target.value)}
-                        disabled={result !== null}
-                        className={`w-full px-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 ${
-                          result !== null
-                            ? checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer)
-                              ? 'border-green-500 bg-green-50 text-green-800'
-                              : 'border-red-500 bg-red-50 text-red-800'
-                            : 'border-slate-200 bg-white'
-                        }`}
-                      />
-                    )}
-                    {result !== null && !checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer) && (
-                      <p className="text-sm text-green-600 mt-1 font-medium">Correct answer: {q.correct_answer.split('|').map(a => a.trim()).join(' / ')}</p>
-                    )}
-                  </div>
-                )}
+                {(q.type === 'fill_blank' || q.type === 'written_answer') && (() => {
+                  const blankCount = getBlankCount(q.correct_answer);
+                  const isMultiBlank = blankCount > 1;
+                  const correctParts = (q.correct_answer || '').split(';').map(p => p.trim());
+
+                  return (
+                    <div className="pl-9 mt-2 space-y-2">
+                      {isMultiBlank ? (
+                        // Multi-blank: render N input fields
+                        correctParts.map((correctPart, bIdx) => {
+                          const userVal = getBlankAnswerPart(fillAnswers[q.id], bIdx);
+                          const isBlankCorrect = result !== null && checkSingleBlank(userVal, correctPart);
+                          const isBlankWrong = result !== null && !checkSingleBlank(userVal, correctPart);
+                          return (
+                            <div key={bIdx}>
+                              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">
+                                Blank {bIdx + 1}
+                              </label>
+                              <input
+                                type="text"
+                                placeholder={`Answer for blank ${bIdx + 1}...`}
+                                value={userVal}
+                                onChange={(e) => {
+                                  const newVal = setBlankAnswerPart(fillAnswers[q.id] || '', bIdx, e.target.value, blankCount);
+                                  handleFillChange(q.id, newVal);
+                                }}
+                                disabled={result !== null}
+                                className={`w-full px-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 ${
+                                  isBlankCorrect ? 'border-green-500 bg-green-50 text-green-800'
+                                    : isBlankWrong ? 'border-red-500 bg-red-50 text-red-800'
+                                    : 'border-slate-200 bg-white'
+                                }`}
+                              />
+                              {isBlankWrong && (
+                                <p className="text-sm text-green-600 mt-0.5 font-medium">
+                                  Correct: {correctPart.split('|').map(a => a.trim()).join(' / ')}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })
+                      ) : q.type === 'written_answer' ? (
+                        <textarea
+                          placeholder="Type your answer here..."
+                          rows={3}
+                          value={fillAnswers[q.id] || ''}
+                          onChange={(e) => handleFillChange(q.id, e.target.value)}
+                          disabled={result !== null}
+                          className={`w-full px-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 resize-y ${
+                            result !== null
+                              ? checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer)
+                                ? 'border-green-500 bg-green-50 text-green-800'
+                                : 'border-red-500 bg-red-50 text-red-800'
+                              : 'border-slate-200 bg-white'
+                          }`}
+                        />
+                      ) : (
+                        <input
+                          type="text"
+                          placeholder="Type your answer..."
+                          value={fillAnswers[q.id] || ''}
+                          onChange={(e) => handleFillChange(q.id, e.target.value)}
+                          disabled={result !== null}
+                          className={`w-full px-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 ${
+                            result !== null
+                              ? checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer)
+                                ? 'border-green-500 bg-green-50 text-green-800'
+                                : 'border-red-500 bg-red-50 text-red-800'
+                              : 'border-slate-200 bg-white'
+                          }`}
+                        />
+                      )}
+                      {!isMultiBlank && result !== null && !checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer) && (
+                        <p className="text-sm text-green-600 mt-1 font-medium">Correct answer: {q.correct_answer.split('|').map(a => a.trim()).join(' / ')}</p>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Coach note for this question */}
                 {coachFeedback?.[String(q.id)] && (

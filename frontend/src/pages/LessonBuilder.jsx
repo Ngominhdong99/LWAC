@@ -642,24 +642,26 @@ const LessonBuilder = () => {
                         </div>
                       ) : q.type === 'written_answer' ? (
                         <div className="mt-2 pt-2 border-t border-slate-200">
-                            <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase">Accepted Answer(s) — separate multiple with | (pipe)</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase">Accepted Answer(s)</label>
                             <input 
                               className="w-full px-3 py-1.5 border border-slate-200 rounded-md text-sm font-bold text-green-700 bg-green-50"
                               value={q.correct_answer}
                               onChange={(e) => updateQuestion(q.id, 'correct_answer', e.target.value)}
-                              placeholder="e.g. makes | make"
+                              placeholder="e.g. doesn't eat|does not eat ; make"
                             />
-                            <p className="text-xs text-slate-400 mt-1">Students will type their answer in a text field. Use | to accept multiple correct answers.</p>
+                            <p className="text-xs text-slate-400 mt-1">Use <b>|</b> for alternative answers. Use <b>;</b> to separate multiple blanks in one question.</p>
+                            <p className="text-xs text-slate-400">Example: <code className="bg-slate-100 px-1 rounded">doesn't eat|does not eat ; make</code> = 2 blanks, first accepts "doesn't eat" or "does not eat"</p>
                         </div>
                       ) : (
                         <div className="mt-2 pt-2 border-t border-slate-200">
-                            <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase">Exact Correct Answer</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase">Correct Answer(s)</label>
                             <input 
-                              className="w-full max-w-sm px-3 py-1.5 border border-slate-200 rounded-md text-sm font-bold text-green-700 bg-green-50"
+                              className="w-full px-3 py-1.5 border border-slate-200 rounded-md text-sm font-bold text-green-700 bg-green-50"
                               value={q.correct_answer}
                               onChange={(e) => updateQuestion(q.id, 'correct_answer', e.target.value)}
-                              placeholder="e.g. urbanization"
+                              placeholder="e.g. doesn't eat ; make"
                             />
+                            <p className="text-xs text-slate-400 mt-1">Use <b>;</b> for multiple blanks. Use <b>|</b> for alternatives. E.g. <code className="bg-slate-100 px-1 rounded">ans1 ; ans2a|ans2b</code></p>
                         </div>
                       )}
                     </div>
