@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, Trash2, Save, X, FileText, Headphones, Edit3, Mic, Image, Video, Link, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Trash2, Save, X, FileText, Headphones, Edit3, Mic, Image, Video, Link, Sparkles, ChevronDown, ChevronUp, Eye, Pencil } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from '../components/Toast';
 import API_URL from '../api';
+import MarkdownRenderer from '../components/MarkdownRenderer';
 
 const LessonBuilder = () => {
   const { user } = useAuth();
@@ -44,6 +45,7 @@ const LessonBuilder = () => {
   const [aiLevel, setAiLevel] = useState('intermediate');
   const [isGeneratingPassage, setIsGeneratingPassage] = useState(false);
   const [showAiPanel, setShowAiPanel] = useState(false);
+  const [passagePreview, setPassagePreview] = useState(false);
 
   // TTS State
   const [ttsScript, setTtsScript] = useState('');
@@ -597,6 +599,7 @@ const LessonBuilder = () => {
                             setPassageText(res.data.passage);
                             toast.success('Passage generated successfully!');
                             setShowAiPanel(false);
+                            setPassagePreview(true);
                           } else {
                             toast.error(res.data.error || 'Failed to generate passage');
                           }
@@ -621,12 +624,44 @@ const LessonBuilder = () => {
               </div>
             )}
 
-            <textarea 
-              value={passageText} 
-              onChange={e => setPassageText(e.target.value)}
-              className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent min-h-[200px]"
-              placeholder="Enter the full text/prompt here..."
-            />
+            <div className="relative">
+              {/* Edit / Preview Toggle */}
+              <div className="flex border-b border-slate-200 mb-0 rounded-t-lg overflow-hidden bg-slate-50">
+                <button
+                  type="button"
+                  onClick={() => setPassagePreview(false)}
+                  className={`flex items-center space-x-1.5 px-4 py-2 text-sm font-semibold transition-colors ${!passagePreview ? 'bg-white text-slate-800 border-b-2 border-primary-500' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <Pencil size={14} />
+                  <span>Edit</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPassagePreview(true)}
+                  className={`flex items-center space-x-1.5 px-4 py-2 text-sm font-semibold transition-colors ${passagePreview ? 'bg-white text-slate-800 border-b-2 border-primary-500' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <Eye size={14} />
+                  <span>Preview</span>
+                </button>
+              </div>
+
+              {passagePreview ? (
+                <div className="w-full px-4 py-3 border border-slate-200 border-t-0 rounded-b-lg bg-white min-h-[200px] max-h-[500px] overflow-y-auto">
+                  {passageText.trim() ? (
+                    <MarkdownRenderer>{passageText}</MarkdownRenderer>
+                  ) : (
+                    <p className="text-slate-400 italic text-sm">Nothing to preview yet...</p>
+                  )}
+                </div>
+              ) : (
+                <textarea 
+                  value={passageText} 
+                  onChange={e => setPassageText(e.target.value)}
+                  className="w-full px-4 py-3 border border-slate-200 border-t-0 rounded-b-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent min-h-[200px]"
+                  placeholder="Enter the full text/prompt here..."
+                />
+              )}
+            </div>
           </div>
         )}
 
