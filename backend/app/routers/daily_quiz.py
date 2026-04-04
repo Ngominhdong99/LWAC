@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime
-import pytz
 import random
 
 from app.database import get_db
@@ -68,8 +67,7 @@ def get_daily_questions(db: Session = Depends(get_db), current_user: User = Depe
     if current_user.role != "student":
         raise HTTPException(status_code=403, detail="Only students can access the Daily Quiz")
         
-    tz = pytz.timezone("Asia/Ho_Chi_Minh")
-    today_str = datetime.now(tz).strftime("%Y-%m-%d")
+    today_str = datetime.now().strftime("%Y-%m-%d")
     
     # Check if already completed today
     activity = db.query(DailyQuizActivity).filter(
@@ -137,8 +135,7 @@ def submit_daily_quiz(score: int, db: Session = Depends(get_db), current_user: U
     if current_user.role != "student":
         raise HTTPException(status_code=403, detail="Only students can submit the Daily Quiz")
         
-    tz = pytz.timezone("Asia/Ho_Chi_Minh")
-    today_str = datetime.now(tz).strftime("%Y-%m-%d")
+    today_str = datetime.now().strftime("%Y-%m-%d")
     
     # Check if already submitted
     existing = db.query(DailyQuizActivity).filter(
