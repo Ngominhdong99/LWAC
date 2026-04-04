@@ -177,4 +177,16 @@ class RewardRequest(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
 
+
+    user = relationship("User")
+
+class DailyQuizActivity(Base):
+    __tablename__ = "daily_quiz_activities"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    quiz_date = Column(String, index=True)  # "YYYY-MM-DD"
+    score = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
     user = relationship("User")

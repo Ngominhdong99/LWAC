@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation, NavLink } from 'react-router-dom';
 import BottomNav from './BottomNav';
-import { BookOpen, Home, Library, MessageCircle, Users, HelpCircle, LogOut, Send, FileEdit, X, Check, Edit3, Trophy, Camera } from 'lucide-react';
+import { BookOpen, Home, Library, MessageCircle, Users, HelpCircle, LogOut, Send, FileEdit, X, Check, Edit3, Trophy, Camera, CalendarCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
 import API_URL from '../api';
@@ -96,6 +96,7 @@ const MainLayout = () => {
 
   const studentNav = [
     { icon: Home, label: 'Dashboard', path: '/' },
+    { icon: CalendarCheck, label: 'Daily Quiz', path: '/daily-quiz' },
     { icon: BookOpen, label: 'Practice', path: '/reading' },
     { icon: Send, label: 'AI Assistant', path: '/hub' },
     { icon: MessageCircle, label: 'Chat', path: '/chat', showBadge: true },

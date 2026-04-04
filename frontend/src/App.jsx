@@ -10,6 +10,7 @@ import WritingTest from './pages/WritingTest';
 import ListeningTest from './pages/ListeningTest';
 import VocabVault from './pages/Vocab';
 import Hub from './pages/Hub';
+import DailyQuiz from './pages/DailyQuiz';
 import CoachDashboard from './pages/CoachDashboard';
 import StudentManager from './pages/StudentManager';
 import CoachChat from './pages/CoachChat';
@@ -41,6 +42,7 @@ function AppRoutes() {
         {/* Student Routes */}
         <Route index element={<Dashboard />} />
         <Route path="reading" element={<PracticeList />} />
+        <Route path="daily-quiz" element={<DailyQuiz />} />
         <Route path="reading/:id" element={<ReadingTest />} />
         <Route path="writing/:id" element={<WritingTest />} />
         <Route path="listening/:id" element={<ListeningTest />} />
