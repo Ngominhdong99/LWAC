@@ -159,6 +159,22 @@ def mark_messages_read(user_id: int, other_id: int, db: Session = Depends(get_db
     return {"ok": True}
 
 
+@router.delete("/message/{message_id}")
+def delete_message(message_id: int, user_id: int = Query(...), db: Session = Depends(get_db)):
+    """Delete an unread message sent by the user."""
+    msg = db.query(models.ChatMessage).filter(models.ChatMessage.id == message_id).first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if msg.sender_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this message")
+    if msg.is_read:
+        raise HTTPException(status_code=400, detail="Cannot delete a message that has already been read")
+    
+    db.delete(msg)
+    db.commit()
+    return {"ok": True}
+
+
 @router.get("/unread/{user_id}")
 def get_unread_count(user_id: int, db: Session = Depends(get_db)):
     """Get count of unread messages for a user."""

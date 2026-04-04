@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
-import { Send, ArrowLeft, Users, Loader2, Check, CheckCheck, Image as ImageIcon, X } from 'lucide-react';
+import { Send, ArrowLeft, Users, Loader2, Check, CheckCheck, Image as ImageIcon, X, Trash2 } from 'lucide-react';
+import { useToast } from '../components/Toast';
 import { useNavigate } from 'react-router-dom';
 import API_URL from '../api';
 import Avatar from '../components/Avatar';
@@ -40,6 +41,7 @@ const CoachChat = () => {
   const { studentId } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const toast = useToast();
   const [conversations, setConversations] = useState([]);
   const [messages, setMessages] = useState([]);
   const [selectedUserId, setSelectedUserId] = useState(studentId ? parseInt(studentId) : null);
@@ -268,6 +270,21 @@ const CoachChat = () => {
     }
   };
 
+  const handleDeleteMessage = async (msgId) => {
+    try {
+      await axios.delete(`${API_URL}/chat/message/${msgId}?user_id=${user.id}`);
+      setMessages(prev => prev.filter(m => m.id !== msgId));
+      // Re-fetch conversations to update the last_message just in case
+      fetchConversations();
+    } catch (err) {
+      if (err.response?.status === 400) {
+        toast.error("Can't delete this message. It has already been read.");
+      } else {
+        toast.error("Failed to delete message.");
+      }
+    }
+  };
+
   const handleImageUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -401,7 +418,16 @@ const CoachChat = () => {
                         <p className="leading-relaxed whitespace-pre-wrap">{msg.message}</p>
                       )}
                     </div>
-                    <div className="flex items-center space-x-1 mt-1 px-1">
+                    <div className={`flex items-center space-x-2 mt-1 px-1 ${msg.sender_id === user.id ? 'justify-end' : ''}`}>
+                      {msg.sender_id === user.id && !msg.is_read && (
+                        <button 
+                          onClick={() => handleDeleteMessage(msg.id)}
+                          className="text-slate-300 hover:text-red-500 transition-colors"
+                          title="Delete this message"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                       <span className="text-xs text-slate-400">
                         {formatTime(msg.created_at)}
                       </span>
