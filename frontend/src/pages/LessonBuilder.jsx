@@ -39,6 +39,13 @@ const LessonBuilder = () => {
   // Speaking
   const [speakingPrompt, setSpeakingPrompt] = useState('');
 
+  // TTS State
+  const [ttsScript, setTtsScript] = useState('');
+  const [ttsVoice, setTtsVoice] = useState('en-US-AriaNeural');
+  const [ttsDialogueMode, setTtsDialogueMode] = useState(false);
+  const [ttsVoice2, setTtsVoice2] = useState('en-US-GuyNeural');
+  const [isGeneratingTts, setIsGeneratingTts] = useState(false);
+
   // Questions Array (Reading & Listening only)
   const [questions, setQuestions] = useState([]);
 
@@ -122,6 +129,30 @@ const LessonBuilder = () => {
       console.error(e);
       toast.error(`Failed to upload ${type}`);
       return null;
+    }
+  };
+
+  const handleGenerateTTS = async () => {
+    if (!ttsScript.trim()) {
+      toast.warning('Please enter a script to generate audio.');
+      return;
+    }
+    setIsGeneratingTts(true);
+    try {
+      const res = await axios.post(`${API_URL}/upload/generate-tts`, {
+        text: ttsScript,
+        voice: ttsVoice,
+        dialogue_mode: ttsDialogueMode,
+        voice2: ttsDialogueMode ? ttsVoice2 : undefined
+      });
+      setAudioUrlInput(res.data.url);
+      setAudioFile(null);
+      toast.success('Audio generated successfully!');
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to generate audio. Please try again.');
+    } finally {
+      setIsGeneratingTts(false);
     }
   };
 
@@ -353,6 +384,103 @@ const LessonBuilder = () => {
                 </div>
               )}
               {audioUrlInput && <p className="text-xs text-blue-600 mt-1">🔗 Using URL</p>}
+              
+              {/* AI Voice Studio */}
+              <div className="mt-6 pt-4 border-t border-slate-200">
+                <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center space-x-2">
+                  <Mic size={16} className="text-amber-500" /> <span>AI Voice Studio</span>
+                </label>
+                <div className="bg-amber-50 rounded-xl p-4 border border-amber-200 shadow-sm space-y-3">
+                  <p className="text-xs text-amber-700 font-medium pb-2 border-b border-amber-200 flex items-center justify-between">
+                    <span>Don't have an audio file? Type your transcript and select an AI voice to generate realistic audio.</span>
+                    <label className="flex items-center space-x-2 cursor-pointer bg-white px-2 py-1 rounded border border-amber-200">
+                      <input 
+                        type="checkbox" 
+                        checked={ttsDialogueMode} 
+                        onChange={(e) => setTtsDialogueMode(e.target.checked)} 
+                        className="rounded text-amber-600 focus:ring-amber-500"
+                      />
+                      <span className="text-xs font-bold text-amber-800">Dialogue Mode (Multi-Voice)</span>
+                    </label>
+                  </p>
+                  <textarea 
+                    value={ttsScript}
+                    onChange={(e) => setTtsScript(e.target.value)}
+                    placeholder={ttsDialogueMode ? "Enter conversation:\nLan: Hi Mark!\nMark: Oh, hi Lan." : "Enter the transcript audio you want the AI to read..."}
+                    className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm min-h-[100px] focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-white leading-relaxed"
+                  />
+                  <div className="flex flex-col md:flex-row gap-3">
+                    <div className="flex-1 space-y-1">
+                      {ttsDialogueMode && <label className="text-xs font-bold text-amber-700">Voice 1</label>}
+                      <select 
+                        value={ttsVoice}
+                        onChange={(e) => setTtsVoice(e.target.value)}
+                        className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm bg-white font-medium focus:ring-2 focus:ring-amber-500"
+                      >
+                        <optgroup label="US English">
+                          <option value="en-US-AriaNeural">Aria (Female) - Natural</option>
+                          <option value="en-US-GuyNeural">Guy (Male) - Professional</option>
+                          <option value="en-US-JennyNeural">Jenny (Female) - Friendly</option>
+                          <option value="en-US-ChristopherNeural">Christopher (Male) - Confident</option>
+                        </optgroup>
+                        <optgroup label="UK English">
+                          <option value="en-GB-SoniaNeural">Sonia (Female) - Clear</option>
+                          <option value="en-GB-RyanNeural">Ryan (Male) - News</option>
+                          <option value="en-GB-LibbyNeural">Libby (Female) - Friendly</option>
+                          <option value="en-GB-ThomasNeural">Thomas (Male) - Confident</option>
+                        </optgroup>
+                        <optgroup label="Australian English">
+                          <option value="en-AU-NatashaNeural">Natasha (Female) - Lively</option>
+                          <option value="en-AU-WilliamNeural">William (Male) - Strong</option>
+                        </optgroup>
+                      </select>
+                    </div>
+                    
+                    {ttsDialogueMode && (
+                      <div className="flex-1 space-y-1">
+                        <label className="text-xs font-bold text-amber-700">Voice 2</label>
+                        <select 
+                          value={ttsVoice2}
+                          onChange={(e) => setTtsVoice2(e.target.value)}
+                          className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm bg-white font-medium focus:ring-2 focus:ring-amber-500"
+                        >
+                          <optgroup label="US English">
+                            <option value="en-US-GuyNeural">Guy (Male) - Professional</option>
+                            <option value="en-US-AriaNeural">Aria (Female) - Natural</option>
+                            <option value="en-US-JennyNeural">Jenny (Female) - Friendly</option>
+                            <option value="en-US-ChristopherNeural">Christopher (Male) - Confident</option>
+                          </optgroup>
+                          <optgroup label="UK English">
+                            <option value="en-GB-SoniaNeural">Sonia (Female) - Clear</option>
+                            <option value="en-GB-RyanNeural">Ryan (Male) - News</option>
+                            <option value="en-GB-LibbyNeural">Libby (Female) - Friendly</option>
+                            <option value="en-GB-ThomasNeural">Thomas (Male) - Confident</option>
+                          </optgroup>
+                          <optgroup label="Australian English">
+                            <option value="en-AU-NatashaNeural">Natasha (Female) - Lively</option>
+                            <option value="en-AU-WilliamNeural">William (Male) - Strong</option>
+                          </optgroup>
+                        </select>
+                      </div>
+                    )}
+
+                    <div className="flex items-end">
+                      <button 
+                        onClick={handleGenerateTTS}
+                        disabled={isGeneratingTts || !ttsScript.trim()}
+                        className="w-full h-[38px] px-4 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-bold rounded-lg transition-colors flex items-center justify-center space-x-2 shadow-sm disabled:opacity-50"
+                      >
+                        {isGeneratingTts ? (
+                          <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
+                        ) : (
+                          <><Mic size={16} /> <span>Generate Voice</span></>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center space-x-2">

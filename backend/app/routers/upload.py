@@ -2,6 +2,9 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 import os
 import uuid
 import shutil
+import edge_tts
+import re
+from app.schemas import TTSRequest
 
 router = APIRouter(prefix="/upload", tags=["upload"])
 
@@ -51,3 +54,69 @@ async def upload_video(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Only video files are allowed")
     filename = _save_file(file, VIDEO_DIR, ".mp4")
     return {"url": f"/static/videos/{filename}"}
+
+
+@router.post("/generate-tts")
+async def generate_tts(request: TTSRequest):
+    if not request.text or len(request.text.strip()) == 0:
+        raise HTTPException(status_code=400, detail="Text is required")
+        
+    try:
+        # Create a unique filename for the generated audio
+        unique_filename = f"{uuid.uuid4()}.mp3"
+        file_path = os.path.join(AUDIO_DIR, unique_filename)
+        
+        if request.dialogue_mode:
+            lines = request.text.strip().split('\n')
+            temp_files = []
+            speaker_map = {}
+            speaker_count = 0
+            
+            for index, line in enumerate(lines):
+                line = line.strip()
+                if not line:
+                    continue
+                
+                # Check for "Speaker: Text" format
+                match = re.match(r'^([^:]+):\s*(.*)$', line)
+                if match:
+                    speaker = match.group(1).strip()
+                    spoken_text = match.group(2).strip()
+                    
+                    if speaker not in speaker_map:
+                        if speaker_count == 0:
+                            speaker_map[speaker] = request.voice
+                        else:
+                            speaker_map[speaker] = request.voice2 or "en-US-GuyNeural"
+                        speaker_count += 1
+                        
+                    current_voice = speaker_map[speaker]
+                    text_to_speak = spoken_text
+                else:
+                    text_to_speak = line
+                    current_voice = request.voice
+                    
+                if text_to_speak:
+                    temp_file = os.path.join(AUDIO_DIR, f"temp_{uuid.uuid4()}_{index}.mp3")
+                    communicate = edge_tts.Communicate(text_to_speak, current_voice)
+                    await communicate.save(temp_file)
+                    temp_files.append(temp_file)
+            
+            # Binary concatenation of the MP3 files
+            if temp_files:
+                with open(file_path, 'wb') as outfile:
+                    for f in temp_files:
+                        with open(f, 'rb') as infile:
+                            outfile.write(infile.read())
+                        os.remove(f)  # Cleanup temp files
+            else:
+                raise HTTPException(status_code=400, detail="No readable text found")
+        else:
+            # Standard single voice mode
+            communicate = edge_tts.Communicate(request.text, request.voice)
+            await communicate.save(file_path)
+        
+        return {"url": f"/static/audio/{unique_filename}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

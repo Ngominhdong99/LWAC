@@ -2,6 +2,13 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
+class TTSRequest(BaseModel):
+    text: str
+    voice: str = "en-US-AriaNeural"
+    dialogue_mode: bool = False
+    voice2: Optional[str] = "en-US-GuyNeural"
+
+
 class UserBase(BaseModel):
     username: str
     email: str
