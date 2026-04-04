@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Bot, Sparkles, Loader2 } from 'lucide-react';
+import { Send, Bot, Sparkles, Loader2, Volume2, Plus, Check } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import API_URL from '../api';
 import MarkdownRenderer from '../components/MarkdownRenderer';
+import { useToast } from '../components/Toast';
+import { speakNatural } from '../utils/tts';
+import { lookupWord } from '../utils/dictionary';
 
 const Hub = () => {
   const { user } = useAuth();
@@ -12,6 +15,9 @@ const Hub = () => {
   const [isAiTyping, setIsAiTyping] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [hasMore, setHasMore] = useState(true);
+  const [selection, setSelection] = useState(null);
+  const [savedSelection, setSavedSelection] = useState(false);
+  const toast = useToast();
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
   const sessionId = useRef(`session_${user?.id || 'anon'}_${Date.now()}`);
@@ -79,6 +85,81 @@ const Hub = () => {
     }
   }, [hasMore, loadingHistory, messages, user]);
 
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      if (!chatContainerRef.current) return;
+      
+      const sel = window.getSelection();
+      if (!sel.rangeCount || sel.isCollapsed) {
+        setSelection(null);
+        return;
+      }
+      
+      const range = sel.getRangeAt(0);
+      if (chatContainerRef.current.contains(range.commonAncestorContainer)) {
+        // Ensure the selection isn't inside an input or textarea
+        let currentElement = range.commonAncestorContainer;
+        if (currentElement.nodeType === 3) currentElement = currentElement.parentNode;
+        
+        const isInteractive = currentElement.closest('button, input, textarea');
+        if (isInteractive) {
+           setSelection(null);
+           return;
+        }
+
+        const text = sel.toString().trim();
+        if (text) {
+          const rect = range.getBoundingClientRect();
+          setSelection({
+            text,
+            rect,
+          });
+          setSavedSelection(false);
+        } else {
+          setSelection(null);
+        }
+      } else {
+        setSelection(null);
+      }
+    };
+
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => document.removeEventListener('selectionchange', handleSelectionChange);
+  }, []);
+
+  const playAudio = (text) => {
+    if (text) {
+      speakNatural(text);
+    }
+  };
+
+  const saveToVocabVault = async (text) => {
+    if (!text || savedSelection) return;
+    try {
+      const entry = await lookupWord(text);
+      if (!entry) {
+        toast.error('Could not find translation for this word.');
+        return;
+      }
+      await axios.post(`${API_URL}/vocab/vault`, {
+        user_id: user.id,
+        word: entry.word,
+        translation: entry.translation,
+        ipa: entry.ipa,
+        type: entry.type,
+      });
+      setSavedSelection(true);
+      toast.success(`Saved "${text}" to Vault!`);
+      setTimeout(() => {
+        window.getSelection().empty();
+        setSelection(null);
+      }, 1000);
+    } catch (err) {
+      toast.error('Failed to save to Vault.');
+      console.error(err);
+    }
+  };
+
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!inputMessage.trim() || isAiTyping) return;
@@ -140,8 +221,37 @@ const Hub = () => {
         <div
           ref={chatContainerRef}
           onScroll={handleScroll}
-          className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 bg-slate-50"
+          className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 bg-slate-50 relative"
         >
+          {/* Floating Action Menu for Text Selection */}
+          {selection && (
+            <div 
+              className="fixed z-[100] animate-in fade-in zoom-in-95 duration-200"
+              style={{
+                top: Math.max(10, selection.rect.top - 60) + 'px',
+                left: selection.rect.left + (selection.rect.width / 2) + 'px',
+                transform: 'translateX(-50%)' // Center exactly over the word
+              }}
+            >
+              <div className="bg-slate-900 shadow-xl rounded-xl flex items-center p-1.5 text-white/90 gap-1 ring-1 ring-slate-800/50">
+                <button 
+                  onClick={() => playAudio(selection.text)}
+                  className="p-2 hover:bg-slate-800 hover:text-white rounded-lg transition-colors flex items-center gap-2"
+                  title="Listen"
+                >
+                  <Volume2 size={16} />
+                </button>
+                <button 
+                  onClick={() => saveToVocabVault(selection.text)}
+                  className={`p-2 rounded-lg transition-colors flex items-center gap-2 ${savedSelection ? 'text-emerald-400 bg-emerald-400/10' : 'hover:bg-slate-800 hover:text-amber-400'}`}
+                  title="Save to Vault"
+                >
+                  {savedSelection ? <Check size={16} /> : <Plus size={16} />}
+                </button>
+              </div>
+              <div className="w-3 h-3 bg-slate-900 absolute left-1/2 -bottom-1.5 transform -translate-x-1/2 rotate-45 border-r border-b border-slate-800/50"></div>
+            </div>
+          )}
           {/* Loading older indicator */}
           {loadingHistory && messages.length > 0 && (
             <div className="flex justify-center py-2">
