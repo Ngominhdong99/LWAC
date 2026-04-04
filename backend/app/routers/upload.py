@@ -84,10 +84,15 @@ async def generate_tts(request: TTSRequest):
                     spoken_text = match.group(2).strip()
                     
                     if speaker not in speaker_map:
-                        if speaker_count == 0:
-                            speaker_map[speaker] = request.voice
-                        else:
-                            speaker_map[speaker] = request.voice2 or "en-US-GuyNeural"
+                        fallback_voices = [
+                            request.voice,
+                            request.voice2 or "en-US-GuyNeural",
+                            "en-GB-SoniaNeural",
+                            "en-GB-RyanNeural",
+                            "en-AU-NatashaNeural",
+                            "en-AU-WilliamNeural"
+                        ]
+                        speaker_map[speaker] = fallback_voices[speaker_count % len(fallback_voices)]
                         speaker_count += 1
                         
                     current_voice = speaker_map[speaker]

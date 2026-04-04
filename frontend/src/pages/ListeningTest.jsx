@@ -375,6 +375,16 @@ const ListeningTest = () => {
         {/* Left: Audio Player & Transcript */}
         <section className="md:w-1/2 overflow-y-auto p-4 md:p-8 bg-white md:border-r border-slate-200 shadow-sm relative z-0">
           <div className="max-w-prose mx-auto">
+            {/* Passage / Context */}
+            {lesson.content?.passage && (
+              <div className="mb-6 bg-white border border-slate-200 rounded-2xl p-5 md:p-6 shadow-sm">
+                <h4 className="font-bold text-slate-800 mb-3">Context / Background</h4>
+                <div className="text-slate-700 text-sm md:text-base leading-relaxed">
+                  <MarkdownRenderer>{lesson.content.passage}</MarkdownRenderer>
+                </div>
+              </div>
+            )}
+
             {/* Audio Player Card */}
             {hasAudio && (
               <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 md:p-8 border border-amber-200 mb-6">
