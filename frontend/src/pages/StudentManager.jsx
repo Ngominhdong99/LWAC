@@ -5,6 +5,7 @@ import { useToast } from '../components/Toast';
 import API_URL from '../api';
 import ConfirmModal from '../components/ConfirmModal';
 import Avatar from '../components/Avatar';
+import MarkdownRenderer from '../components/MarkdownRenderer';
 
 const StudentManager = () => {
   const [students, setStudents] = useState([]);
@@ -744,7 +745,7 @@ const StudentManager = () => {
                                   <Sparkles size={14} className="text-violet-600" />
                                   <span className="font-bold text-violet-700 text-xs uppercase tracking-wider">AI Explanation</span>
                                 </div>
-                                <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap">{aiExplain[q.id].text}</p>
+                                <MarkdownRenderer>{aiExplain[q.id].text}</MarkdownRenderer>
                               </div>
                             ) : (
                               <button

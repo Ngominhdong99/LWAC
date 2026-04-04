@@ -3,6 +3,7 @@ import { Send, Bot, Sparkles, Loader2 } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import API_URL from '../api';
+import MarkdownRenderer from '../components/MarkdownRenderer';
 
 const Hub = () => {
   const { user } = useAuth();
@@ -188,7 +189,11 @@ const Hub = () => {
                     : 'bg-white border border-slate-200 border-l-4 border-l-purple-500 text-slate-800 rounded-bl-none'
                 }`}
               >
-                <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                {msg.sender === 'ai' ? (
+                  <MarkdownRenderer>{msg.text}</MarkdownRenderer>
+                ) : (
+                  <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                )}
               </div>
               <span className="text-xs text-slate-400 mt-1 px-1">{msg.time}</span>
             </div>

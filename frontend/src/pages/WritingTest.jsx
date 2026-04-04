@@ -6,6 +6,7 @@ import { useToast } from '../components/Toast';
 import AskTeacherPopup from '../components/AskTeacherPopup';
 import { ArrowLeft, ArrowRight, Clock, CheckCircle, PenTool, Loader2, Volume2, Plus, HelpCircle, Check } from 'lucide-react';
 import API_URL from '../api';
+import MarkdownRenderer from '../components/MarkdownRenderer';
 import { speakNatural } from '../utils/tts';
 import { lookupWord } from '../utils/dictionary';
 
@@ -325,9 +326,9 @@ const WritingTest = () => {
                      <span className="text-primary-800 font-semibold tracking-wide uppercase text-sm">Estimated Band</span>
                      <span className="text-3xl font-black text-primary-600">{result.evaluation.estimated_band.toFixed(1)}</span>
                   </div>
-                  <p className="text-slate-700 leading-relaxed text-sm md:text-base">
-                    {result.evaluation.feedback}
-                  </p>
+                  <div className="text-slate-700 text-sm md:text-base">
+                    <MarkdownRenderer>{result.evaluation.feedback}</MarkdownRenderer>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
