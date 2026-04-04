@@ -393,9 +393,9 @@ const ReadingTest = () => {
         </div>
       </header>
 
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden pb-16 md:pb-0">
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden pb-16 md:pb-0" ref={textRef}>
         <section className="flex-1 md:w-1/2 p-4 md:p-8 bg-white md:border-r border-slate-200 shadow-sm relative overflow-y-auto">
-          <div className="max-w-prose mx-auto" ref={textRef}>
+          <div className="max-w-prose mx-auto">
             <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-6 leading-tight select-text">{lesson.title}</h2>
             {lesson.content?.image_url && (
               <div className="mb-6">

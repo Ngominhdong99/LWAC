@@ -246,11 +246,11 @@ const WritingTest = () => {
         </div>
       </header>
 
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden pb-16 md:pb-0">
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden pb-16 md:pb-0" ref={textRef}>
         
         {/* Left Side: Prompt Area */}
         <section className="flex-1 md:w-1/2 p-4 md:p-8 bg-white md:border-r border-slate-200 shadow-sm relative z-0 overflow-y-auto">
-          <div className="max-w-prose mx-auto" ref={textRef}>
+          <div className="max-w-prose mx-auto">
             <div className="inline-flex items-center justify-center space-x-2 bg-amber-50 text-amber-700 px-3 py-1.5 rounded-full text-sm font-semibold mb-6">
               <PenTool size={16} />
               <span>{taskType}</span>
