@@ -22,7 +22,7 @@ const DailyQuiz = () => {
   useEffect(() => {
     const fetchQuestions = async () => {
       try {
-        const res = await axios.get(`${API_URL}/daily_quiz/questions`);
+        const res = await axios.get(`${API_URL}/daily_quiz/questions/${user.id}`);
         if (res.data.completed) {
           setHasDoneToday(true);
           setScore(res.data.score);
@@ -68,7 +68,7 @@ const DailyQuiz = () => {
   const finishQuiz = async (finalScore) => {
     try {
       setLoading(true);
-      await axios.post(`${API_URL}/daily_quiz/submit?score=${finalScore}`);
+      await axios.post(`${API_URL}/daily_quiz/submit?user_id=${user.id}&score=${finalScore}`);
       setIsCompleted(true);
     } catch (err) {
       console.error(err);

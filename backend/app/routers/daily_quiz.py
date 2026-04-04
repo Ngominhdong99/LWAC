@@ -6,7 +6,6 @@ import random
 
 from app.database import get_db
 from app.models import User, VocabVault, DailyQuizActivity
-from app.dependencies import get_current_user
 
 router = APIRouter(prefix="/daily_quiz", tags=["daily_quiz"])
 
@@ -57,14 +56,15 @@ def extract_vietnamese_meaning(meaning: str) -> str:
     # Fallback to the first line if no flag is found, assuming it might be translated
     return lines[0].strip()
 
-@router.get("/questions")
-def get_daily_questions(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+@router.get("/questions/{user_id}")
+def get_daily_questions(user_id: int, db: Session = Depends(get_db)):
     """
     Generates 20 random vocabulary questions for the daily quiz.
     It priorities the student's own VocabVault. If there are fewer than 20 words,
     it mixes in words from the global VocabVault, and then the FALLBACK_WORDS.
     """
-    if current_user.role != "student":
+    current_user = db.query(User).filter(User.id == user_id).first()
+    if not current_user or current_user.role != "student":
         raise HTTPException(status_code=403, detail="Only students can access the Daily Quiz")
         
     today_str = datetime.now().strftime("%Y-%m-%d")
@@ -127,12 +127,13 @@ def get_daily_questions(db: Session = Depends(get_db), current_user: User = Depe
     return {"completed": False, "questions": questions}
 
 @router.post("/submit")
-def submit_daily_quiz(score: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def submit_daily_quiz(user_id: int, score: int, db: Session = Depends(get_db)):
     """
     Submits the daily quiz score and records activity.
     No points are awarded.
     """
-    if current_user.role != "student":
+    current_user = db.query(User).filter(User.id == user_id).first()
+    if not current_user or current_user.role != "student":
         raise HTTPException(status_code=403, detail="Only students can submit the Daily Quiz")
         
     today_str = datetime.now().strftime("%Y-%m-%d")
