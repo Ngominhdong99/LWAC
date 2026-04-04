@@ -559,14 +559,14 @@ const LessonBuilder = () => {
               <div className="mb-3 p-4 border-2 border-dashed border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50 rounded-xl space-y-3 animate-in">
                 <div className="flex items-center space-x-2 mb-1">
                   <Sparkles size={16} className="text-violet-500" />
-                  <p className="text-sm font-bold text-violet-700">AI Passage Generator</p>
+                  <p className="text-sm font-bold text-violet-700">AI Content Assistant</p>
                 </div>
-                <p className="text-xs text-slate-500 leading-relaxed">Mô tả chủ đề, nội dung bạn muốn tạo. AI sẽ tự sinh bài đọc/nghe phù hợp.</p>
+                <p className="text-xs text-slate-500 leading-relaxed">Mô tả bất kỳ nội dung nào bạn cần — bài đọc, bài tập, danh sách từ vựng, đoạn hội thoại, v.v. AI sẽ tạo nội dung theo đúng yêu cầu của bạn.</p>
                 <textarea
                   value={aiPrompt}
                   onChange={(e) => setAiPrompt(e.target.value)}
-                  placeholder="Ví dụ: A passage about the benefits of reading books for teenagers, mentioning health, knowledge, and entertainment aspects..."
-                  className="w-full px-3 py-2.5 border border-violet-200 rounded-lg text-sm min-h-[80px] focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white leading-relaxed placeholder:text-slate-400"
+                  placeholder={"Ví dụ:\n• Write a 300-word passage about climate change for B2 students\n• Create a dialogue between a doctor and a patient\n• Write 10 fill-in-the-blank sentences about Present Simple tense\n• Generate a list of vocabulary about technology with definitions"}
+                  className="w-full px-3 py-2.5 border border-violet-200 rounded-lg text-sm min-h-[100px] focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white leading-relaxed placeholder:text-slate-400"
                 />
                 <div className="flex flex-col sm:flex-row gap-3">
                   <div className="flex-1">

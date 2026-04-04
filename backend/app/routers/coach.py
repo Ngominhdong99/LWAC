@@ -397,37 +397,24 @@ def ai_generate_passage(req: AIGeneratePassageRequest):
     if not api_key:
         return {"passage": "", "error": "Gemini API key not configured."}
 
-    level_guide = {
-        "beginner": "Use simple vocabulary (A1-A2 CEFR). Short sentences. Common everyday topics. Around 150-200 words.",
-        "intermediate": "Use B1-B2 level vocabulary. Mix of simple and complex sentences. Around 250-400 words.",
-        "advanced": "Use C1-C2 level vocabulary. Complex sentence structures, idiomatic expressions, academic tone. Around 400-600 words.",
-    }
+    level_hint = ""
+    if req.level:
+        level_guide = {
+            "beginner": "A1-A2 CEFR level, simple vocabulary, short sentences",
+            "intermediate": "B1-B2 level, mix of simple and complex sentences",
+            "advanced": "C1-C2 level, complex structures, academic tone",
+        }
+        level_hint = f"\n- If writing English content, target {level_guide.get(req.level, level_guide['intermediate'])}."
 
-    level_desc = level_guide.get(req.level, level_guide["intermediate"])
+    prompt = f"""You are a helpful AI assistant for an English language coach. Follow the coach's instructions below exactly.
 
-    if req.lesson_type == "listening":
-        format_guide = """Write it as a natural spoken transcript — conversational tone, contractions allowed.
-If the description mentions a dialogue or conversation, write it with speaker labels like:
-Speaker A: ...
-Speaker B: ..."""
-    else:
-        format_guide = """Write it as a well-structured reading passage with clear paragraphs.
-Use topic sentences and supporting details. Include a title for the passage."""
-
-    prompt = f"""You are an expert IELTS/ESL content creator. Generate an English {req.lesson_type} passage based on the coach's description below.
-
-Coach's Description:
+Coach's instructions:
 {req.description}
 
-Requirements:
-- Level: {req.level} — {level_desc}
-- {format_guide}
-- The passage should be educational and engaging.
-- Do NOT include any questions, exercises, or answer keys — only the passage text.
-- Do NOT add any meta-commentary like "Here is the passage:" — just output the passage directly.
-- Write entirely in English.
-
-Generate the passage now:"""
+Guidelines:
+- Do exactly what the coach asks. If they ask for a passage, write a passage. If they ask for exercises, write exercises. If they ask for a list, write a list.
+- Do NOT add meta-commentary like "Here is..." or "Sure, here's..." — just output the content directly.{level_hint}
+- Output clean, well-formatted text."""
 
     models_to_try = [
         "gemini-2.5-flash-lite",
@@ -445,7 +432,7 @@ Generate the passage now:"""
                 contents=[{"role": "user", "parts": [{"text": prompt}]}],
                 config=genai.types.GenerateContentConfig(
                     temperature=0.7,
-                    max_output_tokens=1500,
+                    max_output_tokens=2000,
                 ),
             )
             return {"passage": response.text}
