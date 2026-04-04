@@ -12,12 +12,18 @@ const TYPE_CONFIG = {
   speaking:  { label: 'Speaking',  color: 'bg-rose-50 text-rose-700',       borderColor: 'border-rose-200',    icon: Mic,        btnBg: 'bg-rose-100 text-rose-700 hover:bg-rose-200' },
 };
 
-// Extract group key from title: "Week 1 - Reading" -> "Week 1", or use chapter field
+// Extract group key from title: "Week 1 - Reading" -> "Week 1"
 const getGroupKey = (lesson) => {
-  if (lesson.chapter && lesson.chapter.trim()) return lesson.chapter.trim();
   const dashMatch = lesson.title?.match(/^(.+?)\s*[-\u2013\u2014]\s*/);
   if (dashMatch) return dashMatch[1].trim();
-  return 'General';
+  return lesson.title || 'General';
+};
+
+// Extract a sortable chapter number: "Chapter 3" -> 3, "Week 10" -> 10
+const getChapterSortKey = (lesson) => {
+  const ch = lesson.chapter || '';
+  const num = ch.match(/(\d+)/);
+  return num ? parseInt(num[1], 10) : 9999;
 };
 
 const PracticeList = () => {
@@ -95,14 +101,19 @@ const PracticeList = () => {
       speaking: lessons.filter(l => l.type === 'speaking').length,
     };
 
-    // Group filtered lessons by section
+    // Group filtered lessons by title prefix
     const grouped = {};
     filteredLessons.forEach(lesson => {
       const key = getGroupKey(lesson);
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(lesson);
     });
-    const groupKeys = Object.keys(grouped);
+    // Sort groups by the lowest chapter number within each group
+    const groupKeys = Object.keys(grouped).sort((a, b) => {
+      const minA = Math.min(...grouped[a].map(getChapterSortKey));
+      const minB = Math.min(...grouped[b].map(getChapterSortKey));
+      return minA - minB;
+    });
 
     if (loading) return <div className="p-8 flex justify-center items-center h-[calc(100vh-100px)]"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600"></div></div>;
 
@@ -187,7 +198,7 @@ const PracticeList = () => {
                     {!isCollapsed && (
                       <div className="px-5 pb-5 pt-1">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {groupLessons.map(lesson => {
+                          {[...groupLessons].sort((a, b) => getChapterSortKey(a) - getChapterSortKey(b)).map(lesson => {
                             const config = TYPE_CONFIG[lesson.type] || TYPE_CONFIG.reading;
                             const Icon = config.icon;
                             const isCompleted = lesson.status === 'completed';
@@ -219,8 +230,8 @@ const PracticeList = () => {
                                 </div>
 
                                 <h3 className="text-base font-bold text-slate-800 mb-1 leading-snug">{displayTitle}</h3>
-                                {lesson.chapter && lesson.chapter !== groupKey && (
-                                  <p className="text-[11px] text-slate-400 mb-3">{lesson.chapter}</p>
+                                {lesson.chapter && (
+                                  <p className="text-[11px] text-slate-400 mb-2 flex items-center"><span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-semibold">{lesson.chapter}</span></p>
                                 )}
                                 <p className="text-xs text-slate-400 mb-4 flex-grow">
                                   {isCompleted ? 'Completed' : isInProgress ? 'Continue where you left off' : 'Not started yet'}
