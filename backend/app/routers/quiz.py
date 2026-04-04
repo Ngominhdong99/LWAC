@@ -69,16 +69,21 @@ def submit_writing_task(submission: WritingSubmission, db: Session = Depends(get
         assignment.allow_retake = False
         db.commit()
 
-    # 5. Award reward points (+5 for writing submission)
-    rp = models.RewardPoint(
-        user_id=submission.user_id,
-        lesson_id=submission.lesson_id,
-        result_id=db_result.id,
-        points=5,
-        reason="Writing submission"
-    )
-    db.add(rp)
-    db.commit()
+    # 5. Award reward points (+5 for writing submission if band > 5)
+    points = 0
+    if band_score > 5:
+        points = 5
+        
+    if points > 0:
+        rp = models.RewardPoint(
+            user_id=submission.user_id,
+            lesson_id=submission.lesson_id,
+            result_id=db_result.id,
+            points=points,
+            reason=f"Writing score ({band_score}) > 5"
+        )
+        db.add(rp)
+        db.commit()
 
     return {
         "result_id": db_result.id,
