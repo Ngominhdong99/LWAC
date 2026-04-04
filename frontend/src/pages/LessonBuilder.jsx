@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, Trash2, Save, X, FileText, Headphones, Edit3, Mic, Image, Video, Link, Sparkles, ChevronDown, ChevronUp, Eye, Pencil } from 'lucide-react';
+import { Plus, Trash2, Save, X, FileText, Headphones, Edit3, Mic, Image, Video, Link, Sparkles, ChevronDown, ChevronUp, Eye, Pencil, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from '../components/Toast';
