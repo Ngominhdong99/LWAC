@@ -1,0 +1,4 @@
+2026/04/04 01:12:45 [crit] 48118#48118: *13832 SSL_do_handshake() failed (SSL: error:0A00006C:SSL routines::bad key share) while SSL handshaking, client: 46.101.177.136, server: 0.0.0.0:443
+2026/04/04 01:42:25 [crit] 48118#48118: *13849 SSL_do_handshake() failed (SSL: error:0A00006C:SSL routines::bad key share) while SSL handshaking, client: 212.102.40.218, server: 0.0.0.0:443
+2026/04/04 03:55:44 [crit] 48118#48118: *13898 SSL_do_handshake() failed (SSL: error:0A00006C:SSL routines::bad key share) while SSL handshaking, client: 212.102.40.218, server: 0.0.0.0:443
+2026/04/04 04:58:56 [notice] 67387#67387: signal process started

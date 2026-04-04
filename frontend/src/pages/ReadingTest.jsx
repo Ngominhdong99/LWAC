@@ -26,6 +26,14 @@ const VOCAB_MAP = {
   'renewable': { type: 'adj', ipa: '/rɪˈnjuː.ə.bəl/', meaning: 'Tái tạo được' },
 };
 
+// Check if user's answer matches any accepted correct answer (supports pipe-separated alternatives)
+const checkWrittenAnswer = (userAnswer, correctAnswer) => {
+  const trimmed = (userAnswer || '').trim().toLowerCase();
+  if (!trimmed) return false;
+  const acceptedAnswers = (correctAnswer || '').split('|').map(a => a.trim().toLowerCase());
+  return acceptedAnswers.some(a => a === trimmed);
+};
+
 const ReadingTest = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -81,7 +89,7 @@ const ReadingTest = () => {
                   const val = latest.responses[String(q.id)];
                   if (val !== undefined) {
                     if (q.type === 'multiple_choice') savedMc[q.id] = val;
-                    else if (q.type === 'fill_blank') savedFb[q.id] = val;
+                    else if (q.type === 'fill_blank' || q.type === 'written_answer') savedFb[q.id] = val;
                   }
                 });
               }
@@ -89,7 +97,7 @@ const ReadingTest = () => {
               setFillAnswers(savedFb);
               const correctCount = questions.reduce((acc, q) => {
                 if (q.type === 'multiple_choice' && savedMc[q.id] === q.correct_answer) return acc + 1;
-                if (q.type === 'fill_blank' && (savedFb[q.id] || '').trim().toLowerCase() === q.correct_answer.toLowerCase()) return acc + 1;
+                if ((q.type === 'fill_blank' || q.type === 'written_answer') && checkWrittenAnswer((savedFb[q.id] || ''), q.correct_answer)) return acc + 1;
                 return acc;
               }, 0);
               setResult({ score: latest.score, correct: correctCount, total: questions.length });
@@ -128,7 +136,7 @@ const ReadingTest = () => {
               setFillAnswers(savedFb);
               const correctCount = questions.reduce((acc, q) => {
                 if (q.type === 'multiple_choice' && savedMc[q.id] === q.correct_answer) return acc + 1;
-                if (q.type === 'fill_blank' && (savedFb[q.id] || '').trim().toLowerCase() === (q.correct_answer || '').toLowerCase()) return acc + 1;
+                if ((q.type === 'fill_blank' || q.type === 'written_answer') && checkWrittenAnswer((savedFb[q.id] || ''), (q.correct_answer || ''))) return acc + 1;
                 return acc;
               }, 0);
               setResult({ score: latest.score, correct: correctCount, total: questions.length });
@@ -253,7 +261,7 @@ const ReadingTest = () => {
 
   const handleSubmit = async () => {
     const mcQuestions = lesson.questions.filter(q => q.type === 'multiple_choice');
-    const fbQuestions = lesson.questions.filter(q => q.type === 'fill_blank');
+    const fbQuestions = lesson.questions.filter(q => q.type === 'fill_blank' || q.type === 'written_answer');
 
     const totalAnswered = Object.keys(answers).length + Object.keys(fillAnswers).length;
     if (totalAnswered < lesson.questions.length) {
@@ -269,7 +277,7 @@ const ReadingTest = () => {
     });
     fbQuestions.forEach(q => {
       const userAns = (fillAnswers[q.id] || '').trim().toLowerCase();
-      if (userAns === q.correct_answer.toLowerCase()) score++;
+      if (checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer)) score++;
     });
 
     const normalizedScore = Math.round((score / lesson.questions.length) * 100);
@@ -473,24 +481,41 @@ const ReadingTest = () => {
                   </div>
                 )}
 
-                {q.type === 'fill_blank' && (
+                {(q.type === 'fill_blank' || q.type === 'written_answer') && (
                   <div className="pl-9 mt-2">
-                    <input
-                      type="text"
-                      placeholder="Type your answer..."
-                      value={fillAnswers[q.id] || ''}
-                      onChange={(e) => handleFillChange(q.id, e.target.value)}
-                      disabled={result !== null}
-                      className={`w-full px-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 ${
-                        result !== null
-                          ? (fillAnswers[q.id] || '').trim().toLowerCase() === q.correct_answer.toLowerCase()
-                            ? 'border-green-500 bg-green-50 text-green-800'
-                            : 'border-red-500 bg-red-50 text-red-800'
-                          : 'border-slate-200 bg-white'
-                      }`}
-                    />
-                    {result !== null && (fillAnswers[q.id] || '').trim().toLowerCase() !== q.correct_answer.toLowerCase() && (
-                      <p className="text-sm text-green-600 mt-1 font-medium">Correct answer: {q.correct_answer}</p>
+                    {q.type === 'written_answer' ? (
+                      <textarea
+                        placeholder="Type your answer here..."
+                        rows={3}
+                        value={fillAnswers[q.id] || ''}
+                        onChange={(e) => handleFillChange(q.id, e.target.value)}
+                        disabled={result !== null}
+                        className={`w-full px-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 resize-y ${
+                          result !== null
+                            ? checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer)
+                              ? 'border-green-500 bg-green-50 text-green-800'
+                              : 'border-red-500 bg-red-50 text-red-800'
+                            : 'border-slate-200 bg-white'
+                        }`}
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        placeholder="Type your answer..."
+                        value={fillAnswers[q.id] || ''}
+                        onChange={(e) => handleFillChange(q.id, e.target.value)}
+                        disabled={result !== null}
+                        className={`w-full px-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 ${
+                          result !== null
+                            ? checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer)
+                              ? 'border-green-500 bg-green-50 text-green-800'
+                              : 'border-red-500 bg-red-50 text-red-800'
+                            : 'border-slate-200 bg-white'
+                        }`}
+                      />
+                    )}
+                    {result !== null && !checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer) && (
+                      <p className="text-sm text-green-600 mt-1 font-medium">Correct answer: {q.correct_answer.split('|').map(a => a.trim()).join(' / ')}</p>
                     )}
                   </div>
                 )}

@@ -603,6 +603,7 @@ const LessonBuilder = () => {
                       >
                         <option value="multiple_choice">Multiple Choice</option>
                         <option value="fill_blank">Fill in the Blank</option>
+                        <option value="written_answer">Written Answer</option>
                       </select>
 
                       <input 
@@ -638,6 +639,17 @@ const LessonBuilder = () => {
                                 <option value="D">D</option>
                             </select>
                           </div>
+                        </div>
+                      ) : q.type === 'written_answer' ? (
+                        <div className="mt-2 pt-2 border-t border-slate-200">
+                            <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase">Accepted Answer(s) — separate multiple with | (pipe)</label>
+                            <input 
+                              className="w-full px-3 py-1.5 border border-slate-200 rounded-md text-sm font-bold text-green-700 bg-green-50"
+                              value={q.correct_answer}
+                              onChange={(e) => updateQuestion(q.id, 'correct_answer', e.target.value)}
+                              placeholder="e.g. makes | make"
+                            />
+                            <p className="text-xs text-slate-400 mt-1">Students will type their answer in a text field. Use | to accept multiple correct answers.</p>
                         </div>
                       ) : (
                         <div className="mt-2 pt-2 border-t border-slate-200">

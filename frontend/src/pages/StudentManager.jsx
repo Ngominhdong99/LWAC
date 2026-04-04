@@ -655,8 +655,10 @@ const StudentManager = () => {
                   
                   if (q.type === 'multiple_choice') {
                     isCorrect = studentAns === q.correct_answer;
-                  } else if (q.type === 'fill_blank') {
-                    isCorrect = (studentAns || '').trim().toLowerCase() === q.correct_answer.toLowerCase();
+                  } else if (q.type === 'fill_blank' || q.type === 'written_answer') {
+                    const trimmed = (studentAns || '').trim().toLowerCase();
+                    const accepted = (q.correct_answer || '').split('|').map(a => a.trim().toLowerCase());
+                    isCorrect = accepted.some(a => a === trimmed);
                   }
 
                   return (
