@@ -288,7 +288,6 @@ const LessonBuilder = () => {
         setTitle('');
         setChapter('');
         setPassageText('');
-        setSpeakingPrompt('');
         setAudioFile(null);
         setQuestions([]);
         setTask1Min(150);
