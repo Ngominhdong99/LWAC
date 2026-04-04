@@ -36,9 +36,6 @@ const LessonBuilder = () => {
   // Writing
   const [task1Min, setTask1Min] = useState(150);
   const [task2Min, setTask2Min] = useState(250);
-  
-  // Speaking
-  const [speakingPrompt, setSpeakingPrompt] = useState('');
 
   // AI Generate Passage State
   const [aiPrompt, setAiPrompt] = useState('');
@@ -87,7 +84,7 @@ const LessonBuilder = () => {
           setTask1Min(data.content?.task_1_min_words || 150);
           setTask2Min(data.content?.task_2_min_words || 250);
         } else if (data.type === 'speaking') {
-          setSpeakingPrompt(data.content?.prompt || '');
+          setPassageText(data.content?.prompt || '');
         }
       } catch (e) {
         console.error(e);
@@ -245,7 +242,7 @@ const LessonBuilder = () => {
          };
       } else if (lessonType === 'speaking') {
          content = {
-            prompt: speakingPrompt
+            prompt: passageText
          };
       }
 
@@ -575,12 +572,11 @@ const LessonBuilder = () => {
           </div>
         )}
 
-        {(lessonType === 'reading' || lessonType === 'writing' || lessonType === 'listening') && (
+        {(lessonType === 'reading' || lessonType === 'writing' || lessonType === 'listening' || lessonType === 'speaking') && (
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center justify-between">
-              <span>{lessonType === 'writing' ? 'Writing Task Prompt' : 'Reading/Context Passage'}</span>
-              {lessonType !== 'writing' && (
-                <button
+              <span>{lessonType === 'writing' ? 'Writing Task Prompt' : lessonType === 'speaking' ? 'Speaking Prompt/Questions' : 'Reading/Context Passage'}</span>
+              <button
                   type="button"
                   onClick={() => setShowAiPanel(!showAiPanel)}
                   className="flex items-center space-x-1.5 text-xs font-bold px-3 py-1.5 rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 text-white hover:from-violet-600 hover:to-indigo-600 transition-all shadow-sm hover:shadow-md"
@@ -589,10 +585,9 @@ const LessonBuilder = () => {
                   <span>AI Generate</span>
                   {showAiPanel ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                 </button>
-              )}
             </label>
 
-            {showAiPanel && lessonType !== 'writing' && (
+            {showAiPanel && (
               <div className="mb-3 p-4 border-2 border-dashed border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50 rounded-xl space-y-3 animate-in">
                 <div className="flex items-center space-x-2 mb-1">
                   <Sparkles size={16} className="text-violet-500" />
@@ -697,18 +692,6 @@ const LessonBuilder = () => {
                 />
               )}
             </div>
-          </div>
-        )}
-
-        {lessonType === 'speaking' && (
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">Speaking Prompt/Questions</label>
-            <textarea 
-              value={speakingPrompt} 
-              onChange={e => setSpeakingPrompt(e.target.value)}
-              className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent min-h-[150px]"
-              placeholder="e.g. Describe a time you..."
-            />
           </div>
         )}
 
