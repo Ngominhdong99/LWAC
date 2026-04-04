@@ -15,6 +15,28 @@ def read_results(user_id: int, skip: int = 0, limit: int = 100, db: Session = De
     results = db.query(models.Result).filter(models.Result.user_id == user_id).offset(skip).limit(limit).all()
     return results
 
+def __check_single_blank(user_answer: str, correct_answer: str) -> bool:
+    trimmed = (user_answer or "").strip().lower()
+    if not trimmed:
+        return False
+    accepted = [a.strip().lower() for a in (correct_answer or "").split("|")]
+    return trimmed in accepted
+
+def __check_written_answer(user_answer: str, correct_answer: str) -> bool:
+    parts = (correct_answer or "").split(";")
+    if len(parts) == 1:
+        return __check_single_blank(user_answer, correct_answer)
+        
+    user_parts = (user_answer or "").split(";;")
+    if len(user_parts) != len(parts):
+        return False
+        
+    for u_ans, c_ans in zip(user_parts, parts):
+        if not __check_single_blank(u_ans, c_ans):
+            return False
+            
+    return True
+
 @router.post("/{user_id}", response_model=schemas.ResultResponse)
 def create_result(user_id: int, result: schemas.ResultCreate, db: Session = Depends(get_db)):
     # Verify user exists
@@ -66,8 +88,14 @@ def create_result(user_id: int, result: schemas.ResultCreate, db: Session = Depe
             responses = result.responses if isinstance(result.responses, dict) else {}
             for q in questions:
                 student_ans = responses.get(str(q.id))
-                if student_ans and student_ans.strip().lower() == (q.correct_answer or "").strip().lower():
-                    correct_count += 1
+                if not student_ans:
+                    continue
+                if q.type == "multiple_choice":
+                    if student_ans.strip().lower() == (q.correct_answer or "").strip().lower():
+                        correct_count += 1
+                elif q.type in ("fill_blank", "written_answer"):
+                    if __check_written_answer(student_ans, q.correct_answer):
+                        correct_count += 1
             if lesson.type == "reading":
                 points = correct_count * 1
             else:
