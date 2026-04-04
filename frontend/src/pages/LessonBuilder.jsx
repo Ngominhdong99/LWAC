@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, Trash2, Save, X, FileText, Headphones, Edit3, Mic, Image, Video, Link } from 'lucide-react';
+import { Plus, Trash2, Save, X, FileText, Headphones, Edit3, Mic, Image, Video, Link, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from '../components/Toast';
@@ -38,6 +38,12 @@ const LessonBuilder = () => {
   
   // Speaking
   const [speakingPrompt, setSpeakingPrompt] = useState('');
+
+  // AI Generate Passage State
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiLevel, setAiLevel] = useState('intermediate');
+  const [isGeneratingPassage, setIsGeneratingPassage] = useState(false);
+  const [showAiPanel, setShowAiPanel] = useState(false);
 
   // TTS State
   const [ttsScript, setTtsScript] = useState('');
@@ -536,7 +542,85 @@ const LessonBuilder = () => {
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center justify-between">
               <span>{lessonType === 'writing' ? 'Writing Task Prompt' : 'Reading/Context Passage'}</span>
+              {lessonType !== 'writing' && (
+                <button
+                  type="button"
+                  onClick={() => setShowAiPanel(!showAiPanel)}
+                  className="flex items-center space-x-1.5 text-xs font-bold px-3 py-1.5 rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 text-white hover:from-violet-600 hover:to-indigo-600 transition-all shadow-sm hover:shadow-md"
+                >
+                  <Sparkles size={13} />
+                  <span>AI Generate</span>
+                  {showAiPanel ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                </button>
+              )}
             </label>
+
+            {showAiPanel && lessonType !== 'writing' && (
+              <div className="mb-3 p-4 border-2 border-dashed border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50 rounded-xl space-y-3 animate-in">
+                <div className="flex items-center space-x-2 mb-1">
+                  <Sparkles size={16} className="text-violet-500" />
+                  <p className="text-sm font-bold text-violet-700">AI Passage Generator</p>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed">Mô tả chủ đề, nội dung bạn muốn tạo. AI sẽ tự sinh bài đọc/nghe phù hợp.</p>
+                <textarea
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  placeholder="Ví dụ: A passage about the benefits of reading books for teenagers, mentioning health, knowledge, and entertainment aspects..."
+                  className="w-full px-3 py-2.5 border border-violet-200 rounded-lg text-sm min-h-[80px] focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white leading-relaxed placeholder:text-slate-400"
+                />
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="flex-1">
+                    <label className="text-xs font-bold text-violet-600 mb-1 block">Level</label>
+                    <select
+                      value={aiLevel}
+                      onChange={(e) => setAiLevel(e.target.value)}
+                      className="w-full px-3 py-2 border border-violet-200 rounded-lg text-sm bg-white font-medium focus:ring-2 focus:ring-violet-500"
+                    >
+                      <option value="beginner">🟢 Beginner (A1-A2) — 150-200 words</option>
+                      <option value="intermediate">🟡 Intermediate (B1-B2) — 250-400 words</option>
+                      <option value="advanced">🔴 Advanced (C1-C2) — 400-600 words</option>
+                    </select>
+                  </div>
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!aiPrompt.trim()) return;
+                        setIsGeneratingPassage(true);
+                        try {
+                          const res = await axios.post(`${API_URL}/coach/ai-generate-passage`, {
+                            description: aiPrompt,
+                            lesson_type: lessonType,
+                            level: aiLevel,
+                          });
+                          if (res.data.passage) {
+                            setPassageText(res.data.passage);
+                            toast.success('Passage generated successfully!');
+                            setShowAiPanel(false);
+                          } else {
+                            toast.error(res.data.error || 'Failed to generate passage');
+                          }
+                        } catch (err) {
+                          console.error(err);
+                          toast.error('AI generation failed. Please try again.');
+                        } finally {
+                          setIsGeneratingPassage(false);
+                        }
+                      }}
+                      disabled={isGeneratingPassage || !aiPrompt.trim()}
+                      className="w-full sm:w-auto h-[38px] px-5 bg-gradient-to-r from-violet-500 to-indigo-500 hover:from-violet-600 hover:to-indigo-600 text-white font-bold rounded-lg transition-all flex items-center justify-center space-x-2 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isGeneratingPassage ? (
+                        <><span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span><span className="ml-2">Generating...</span></>
+                      ) : (
+                        <><Sparkles size={15} /> <span>Generate</span></>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <textarea 
               value={passageText} 
               onChange={e => setPassageText(e.target.value)}

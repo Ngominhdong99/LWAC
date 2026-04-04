@@ -375,3 +375,84 @@ Write in English with a friendly, professional tone. Keep it under 300 words."""
             continue
 
     return {"explanation": f"AI explanation failed after trying all models: {str(last_error)[:200]}"}
+
+
+# ── AI Generate Passage ──────────────────────────────────────────
+class AIGeneratePassageRequest(BaseModel):
+    description: str
+    lesson_type: str = "reading"  # reading or listening
+    level: str = "intermediate"   # beginner, intermediate, advanced
+
+
+@router.post("/ai-generate-passage")
+def ai_generate_passage(req: AIGeneratePassageRequest):
+    """Use Gemini to generate a reading/listening passage from a coach's description."""
+    import os
+    try:
+        from google import genai
+    except ImportError:
+        return {"passage": "", "error": "AI service not available (google-genai not installed)"}
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return {"passage": "", "error": "Gemini API key not configured."}
+
+    level_guide = {
+        "beginner": "Use simple vocabulary (A1-A2 CEFR). Short sentences. Common everyday topics. Around 150-200 words.",
+        "intermediate": "Use B1-B2 level vocabulary. Mix of simple and complex sentences. Around 250-400 words.",
+        "advanced": "Use C1-C2 level vocabulary. Complex sentence structures, idiomatic expressions, academic tone. Around 400-600 words.",
+    }
+
+    level_desc = level_guide.get(req.level, level_guide["intermediate"])
+
+    if req.lesson_type == "listening":
+        format_guide = """Write it as a natural spoken transcript — conversational tone, contractions allowed.
+If the description mentions a dialogue or conversation, write it with speaker labels like:
+Speaker A: ...
+Speaker B: ..."""
+    else:
+        format_guide = """Write it as a well-structured reading passage with clear paragraphs.
+Use topic sentences and supporting details. Include a title for the passage."""
+
+    prompt = f"""You are an expert IELTS/ESL content creator. Generate an English {req.lesson_type} passage based on the coach's description below.
+
+Coach's Description:
+{req.description}
+
+Requirements:
+- Level: {req.level} — {level_desc}
+- {format_guide}
+- The passage should be educational and engaging.
+- Do NOT include any questions, exercises, or answer keys — only the passage text.
+- Do NOT add any meta-commentary like "Here is the passage:" — just output the passage directly.
+- Write entirely in English.
+
+Generate the passage now:"""
+
+    models_to_try = [
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash-lite",
+        "gemini-2.0-flash",
+    ]
+
+    client = genai.Client(api_key=api_key)
+    last_error = None
+
+    for model_name in models_to_try:
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=[{"role": "user", "parts": [{"text": prompt}]}],
+                config=genai.types.GenerateContentConfig(
+                    temperature=0.7,
+                    max_output_tokens=1500,
+                ),
+            )
+            return {"passage": response.text}
+        except Exception as e:
+            last_error = e
+            print(f"[AI Generate] {model_name} failed: {e}")
+            continue
+
+    return {"passage": "", "error": f"AI generation failed: {str(last_error)[:200]}"}
+
