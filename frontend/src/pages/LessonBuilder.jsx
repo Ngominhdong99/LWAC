@@ -57,6 +57,11 @@ const LessonBuilder = () => {
   // Questions Array (Reading & Listening only)
   const [questions, setQuestions] = useState([]);
 
+  // AI Parse Questions State
+  const [showAiParsePanel, setShowAiParsePanel] = useState(false);
+  const [aiParseText, setAiParseText] = useState('');
+  const [isParsingQuestions, setIsParsingQuestions] = useState(false);
+
   useEffect(() => {
     const fetchLesson = async () => {
       if (!id) return;
@@ -105,6 +110,36 @@ const LessonBuilder = () => {
         correct_answer: 'A'
       }
     ]);
+  };
+
+  const handleParseQuestions = async () => {
+    if (!aiParseText.trim()) {
+      toast.warning('Please enter some text containing questions and answers.');
+      return;
+    }
+    setIsParsingQuestions(true);
+    try {
+      const res = await axios.post(`${API_URL}/coach/ai-parse-questions`, {
+        raw_text: aiParseText
+      });
+      if (res.data.questions && res.data.questions.length > 0) {
+        const newQuestions = res.data.questions.map((q, i) => ({
+          ...q,
+          id: Date.now() + i
+        }));
+        setQuestions(prev => [...prev, ...newQuestions]);
+        toast.success(`Successfully extracted ${newQuestions.length} questions!`);
+        setShowAiParsePanel(false);
+        setAiParseText('');
+      } else {
+        toast.error(res.data.error || 'No questions could be extracted. Please check the text format.');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to parse questions. Please try again.');
+    } finally {
+      setIsParsingQuestions(false);
+    }
   };
 
   const updateQuestion = (id, field, value) => {
@@ -695,13 +730,59 @@ const LessonBuilder = () => {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-slate-800">Questions ({questions.length})</h3>
-              <button 
-                onClick={handleAddQuestion}
-                className="flex items-center space-x-1 text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition-colors font-medium"
-              >
-                <Plus size={16} /> <span>Add Question</span>
-              </button>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => setShowAiParsePanel(!showAiParsePanel)}
+                  className={`flex items-center space-x-1 text-sm px-3 py-1.5 rounded-lg transition-colors font-medium border ${showAiParsePanel ? 'bg-violet-100 text-violet-700 border-violet-200' : 'bg-white text-violet-600 hover:bg-violet-50 border-violet-100 shadow-sm'}`}
+                >
+                  <Sparkles size={16} /> <span className="hidden sm:inline">Import</span>
+                </button>
+                <button 
+                  onClick={handleAddQuestion}
+                  className="flex items-center space-x-1 text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition-colors font-medium"
+                >
+                  <Plus size={16} /> <span className="hidden sm:inline">Add Question</span>
+                </button>
+              </div>
             </div>
+
+            {/* AI Question Parser Panel */}
+            {showAiParsePanel && (
+              <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 mb-4 shadow-inner">
+                <div className="flex justify-between items-center mb-3">
+                  <div className="flex items-center space-x-2 text-violet-700">
+                    <Sparkles size={18} />
+                    <h4 className="font-bold text-sm">AI Question Import</h4>
+                  </div>
+                  <button onClick={() => setShowAiParsePanel(false)} className="text-violet-400 hover:text-violet-600">
+                    <X size={18} />
+                  </button>
+                </div>
+                <p className="text-xs text-violet-600 mb-3 uppercase tracking-wide font-semibold">Paste raw text containing questions, options, and answers.</p>
+                <textarea
+                  value={aiParseText}
+                  onChange={e => setAiParseText(e.target.value)}
+                  className="w-full px-3 py-2 border border-violet-200 rounded-lg text-sm mb-3 focus:ring-2 focus:ring-violet-400 focus:border-transparent min-h-[120px]"
+                  placeholder={`e.g. 1. What is the capital of France? \nA) London\nB) Paris \nC) Rome \nAnswer: B`}
+                />
+                <button
+                  onClick={handleParseQuestions}
+                  disabled={isParsingQuestions || !aiParseText.trim()}
+                  className={`w-full flex items-center justify-center py-2.5 rounded-lg text-sm font-bold transition-all shadow-sm ${
+                    isParsingQuestions || !aiParseText.trim()
+                      ? 'bg-violet-200 text-violet-400 cursor-not-allowed'
+                      : 'bg-violet-600 text-white hover:bg-violet-700 hover:shadow-md'
+                  }`}
+                >
+                  {isParsingQuestions ? (
+                    <><Loader2 size={16} className="animate-spin mr-2" /> Extracting Questions...</>
+                  ) : (
+                    <><Sparkles size={16} className="mr-2" /> Extract & Append Questions</>
+                  )}
+                </button>
+              </div>
+            )}
+
 
             <div className="space-y-4">
               {questions.map((q, idx) => (

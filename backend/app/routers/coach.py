@@ -445,3 +445,83 @@ Guidelines:
 
     return {"passage": "", "error": f"AI generation failed: {str(last_error)[:200]}"}
 
+
+# ── AI Parse Questions ──────────────────────────────────────────
+class AIParseQuestionsRequest(BaseModel):
+    raw_text: str
+
+@router.post("/ai-parse-questions")
+def ai_parse_questions(req: AIParseQuestionsRequest):
+    """Use Gemini to parse raw text into structured JSON questions."""
+    import os
+    import json
+    try:
+        from google import genai
+        from google.genai import types
+    except ImportError:
+        return {"questions": [], "error": "AI service not available"}
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return {"questions": [], "error": "Gemini API key not configured."}
+
+    prompt = f"""You are a helpful AI assistant that extracts quiz questions from raw text and outputs strictly valid JSON.
+    
+Raw text:
+\"\"\"
+{req.raw_text}
+\"\"\"
+
+Guidelines:
+1. Identify all questions in the text.
+2. For each question, decide if it is "multiple_choice" or "fill_blank". 
+   - If it has options (like A, B, C, D), it is "multiple_choice". 
+   - If it expects a typed answer without given options (e.g. fill in the blanks), it is "fill_blank".
+3. Extract the `question_text`. Provide the question text strictly.
+4. If it's "multiple_choice", extract the options into a dictionary with keys "A", "B", "C", "D" (or however many there are). Ensure keys are single uppercase letters.
+5. Extract the correct answer:
+   - For "multiple_choice", this should be the option key (e.g. "A").
+   - For "fill_blank", this should be the exact text answer. If there are multiple blanks in a single question, separate the answers by semi-colons like `;;` (e.g. "answer1;;answer2").
+6. The output must be a JSON array of objects. Each object must have exactly these keys:
+   - `type` (string: "multiple_choice" or "fill_blank")
+   - `question_text` (string)
+   - `options` (dictionary of string to string, empty dict if fill_blank)
+   - `correct_answer` (string)
+
+Return ONLY the JSON array. Do not wrap it in markdown code blocks like ```json.
+"""
+
+    models_to_try = [
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash-lite",
+        "gemini-2.0-flash",
+    ]
+
+    client = genai.Client(api_key=api_key)
+    last_error = None
+
+    for model_name in models_to_try:
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=[{"role": "user", "parts": [{"text": prompt}]}],
+                config=types.GenerateContentConfig(
+                    temperature=0.1,
+                    response_mime_type="application/json",
+                ),
+            )
+            
+            try:
+                questions = json.loads(response.text)
+                if not isinstance(questions, list):
+                     questions = [questions]
+                return {"questions": questions}
+            except json.JSONDecodeError:
+                return {"questions": [], "error": "Failed to parse JSON from AI response."}
+                
+        except Exception as e:
+            last_error = e
+            print(f"[AI Parse Questions] {model_name} failed: {e}")
+            continue
+
+    return {"questions": [], "error": f"AI generation failed: {str(last_error)[:200]}"}
