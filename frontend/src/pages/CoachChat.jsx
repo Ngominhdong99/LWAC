@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
-import { Send, ArrowLeft, Users, Loader2, Check, CheckCheck, Image as ImageIcon } from 'lucide-react';
+import { Send, ArrowLeft, Users, Loader2, Check, CheckCheck, Image as ImageIcon, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import API_URL from '../api';
 import Avatar from '../components/Avatar';
@@ -45,6 +45,7 @@ const CoachChat = () => {
   const [selectedUserId, setSelectedUserId] = useState(studentId ? parseInt(studentId) : null);
   const [selectedUser, setSelectedUser] = useState(null);
   const [inputMsg, setInputMsg] = useState('');
+  const [pendingImage, setPendingImage] = useState(null);
   const [sending, setSending] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -229,13 +230,31 @@ const CoachChat = () => {
 
   const handleSend = async (e) => {
     e.preventDefault();
-    if (!inputMsg.trim() || !selectedUserId || !user) return;
+    if (!inputMsg.trim() && !pendingImage) return;
+    if (!selectedUserId || !user) return;
     setSending(true);
     try {
-      await axios.post(`${API_URL}/chat/send`, {
-        sender_id: user.id, receiver_id: selectedUserId, message: inputMsg
-      });
-      setInputMsg('');
+      if (pendingImage) {
+        const formData = new FormData();
+        formData.append('file', pendingImage.file);
+        const res = await axios.post(`${API_URL}/upload/image`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        const imageUrl = res.data.url;
+        await axios.post(`${API_URL}/chat/send`, {
+          sender_id: user.id, receiver_id: selectedUserId, message: `[IMAGE]${imageUrl}`
+        });
+        setPendingImage(null);
+      }
+
+      const textMsg = inputMsg.trim();
+      if (textMsg) {
+        await axios.post(`${API_URL}/chat/send`, {
+          sender_id: user.id, receiver_id: selectedUserId, message: textMsg
+        });
+        setInputMsg('');
+      }
+
       // Refresh messages AND conversation list (for last_message update)
       const [msgRes] = await Promise.all([
         axios.get(`${API_URL}/chat/history/${user.id}/${selectedUserId}?limit=30`),
@@ -249,40 +268,17 @@ const CoachChat = () => {
     }
   };
 
-  const uploadAndSendImage = async (file) => {
-    if (!selectedUserId || !user) return;
-    setSending(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await axios.post(`${API_URL}/upload/image`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      const imageUrl = res.data.url;
-      await axios.post(`${API_URL}/chat/send`, {
-        sender_id: user.id, receiver_id: selectedUserId, message: `[IMAGE]${imageUrl}`
-      });
-      const [msgRes] = await Promise.all([
-        axios.get(`${API_URL}/chat/history/${user.id}/${selectedUserId}?limit=30`),
-        fetchConversations(),
-      ]);
-      setMessages(msgRes.data);
-    } catch (err) {
-      console.error("Failed to upload image", err);
-    } finally {
-      setSending(false);
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
-  };
-
-  const handleImageUpload = async (e) => {
+  const handleImageUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    await uploadAndSendImage(file);
+    setPendingImage({
+      file,
+      preview: URL.createObjectURL(file)
+    });
     e.target.value = null; // reset
   };
   
-  const handlePaste = async (e) => {
+  const handlePaste = (e) => {
     const items = e.clipboardData?.items;
     if (!items) return;
     for (let i = 0; i < items.length; i++) {
@@ -290,7 +286,10 @@ const CoachChat = () => {
           const file = items[i].getAsFile();
           if (file) {
              e.preventDefault();
-             await uploadAndSendImage(file);
+             setPendingImage({
+               file,
+               preview: URL.createObjectURL(file)
+             });
              break;
           }
        }
@@ -426,16 +425,30 @@ const CoachChat = () => {
               </div>
 
               {/* Input */}
+              {pendingImage && (
+                <div className="p-3 bg-slate-50 border-t border-slate-200 shadow-inner">
+                  <div className="relative inline-block">
+                    <img src={pendingImage.preview} alt="Preview" className="h-24 rounded-lg border border-slate-300 object-cover shadow-sm" />
+                    <button 
+                      type="button"
+                      onClick={() => setPendingImage(null)}
+                      className="absolute -top-2 -right-2 bg-slate-800 text-white p-1.5 rounded-full hover:bg-red-500 transition-colors shadow-md z-10"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                </div>
+              )}
               <form onSubmit={handleSend} className="p-3 bg-white border-t border-slate-200 flex items-center space-x-2">
                 <label className={`p-2 text-slate-400 hover:text-primary-600 transition-colors cursor-pointer rounded-xl hover:bg-slate-100 flex-shrink-0 ${sending ? 'opacity-50 pointer-events-none' : ''}`}>
                   <ImageIcon size={22} />
                   <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={sending} />
                 </label>
                 <input ref={inputRef} onPaste={handlePaste} type="text" value={inputMsg} onChange={handleInputChange}
-                  placeholder="Type a message or paste an image..." disabled={sending} autoFocus
+                  placeholder={pendingImage ? "Add a message with your image..." : "Type a message or paste an image..."} disabled={sending} autoFocus
                   className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
-                <button type="submit" disabled={!inputMsg.trim() || sending}
-                  className={`p-2.5 rounded-xl transition-colors flex-shrink-0 ${!inputMsg.trim() || sending ? 'bg-slate-100 text-slate-400' : 'bg-primary-600 text-white hover:bg-primary-700'}`}>
+                <button type="submit" disabled={(!inputMsg.trim() && !pendingImage) || sending}
+                  className={`p-2.5 rounded-xl transition-colors flex-shrink-0 ${(!inputMsg.trim() && !pendingImage) || sending ? 'bg-slate-100 text-slate-400' : 'bg-primary-600 text-white hover:bg-primary-700'}`}>
                   {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
                 </button>
               </form>
