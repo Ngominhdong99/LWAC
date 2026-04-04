@@ -71,6 +71,7 @@ class AssignmentOut(BaseModel):
     id: int
     lesson_id: int
     lesson_title: str = ""
+    lesson_chapter: str = ""
     lesson_type: str = ""
     status: str
     created_at: datetime
@@ -203,6 +204,7 @@ def get_assignments(student_id: int, db: Session = Depends(get_db)):
                 db.commit()
         out.append(AssignmentOut(
             id=a.id, lesson_id=a.lesson_id, lesson_title=lesson.title if lesson else "Unknown",
+            lesson_chapter=lesson.chapter if lesson else "",
             lesson_type=lesson.type if lesson else "", status=a.status,
             created_at=a.created_at, completed_at=a.completed_at, score=score, result_id=a.result_id,
             allow_retake=a.allow_retake or False
