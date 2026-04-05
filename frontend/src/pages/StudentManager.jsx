@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Users, Plus, Trash2, Edit3, X, Eye, ChevronDown, RefreshCw, Save, Sparkles, Loader2, Send, MessageSquare } from 'lucide-react';
+import { Users, Plus, Trash2, Edit3, X, Eye, ChevronDown, RefreshCw, Save, Sparkles, Loader2, Send, MessageSquare, Library, Volume2 } from 'lucide-react';
 import { useToast } from '../components/Toast';
+import { speakNatural } from '../utils/tts';
 import API_URL from '../api';
 import ConfirmModal from '../components/ConfirmModal';
 import Avatar from '../components/Avatar';
@@ -21,6 +22,12 @@ const StudentManager = () => {
   const [viewingResult, setViewingResult] = useState(null);
   const [aiExplain, setAiExplain] = useState({}); // { [questionId]: { loading, text } }
   const [confirmDialog, setConfirmDialog] = useState(null);
+  
+  // Vocab Modal State
+  const [showVocabModal, setShowVocabModal] = useState(false);
+  const [vocabData, setVocabData] = useState([]);
+  const [vocabStudentName, setVocabStudentName] = useState('');
+  const [loadingVocab, setLoadingVocab] = useState(false);
   
   // Writing feedback state
   const [selectedText, setSelectedText] = useState('');
@@ -158,6 +165,21 @@ const StudentManager = () => {
     }
   };
 
+  const handleViewVocabVault = async (studentId, studentName) => {
+    setVocabStudentName(studentName);
+    setShowVocabModal(true);
+    setLoadingVocab(true);
+    setVocabData([]);
+    try {
+      const res = await axios.get(`${API_URL}/vocab/${studentId}`);
+      setVocabData(res.data);
+    } catch (e) {
+      toast.error('Error fetching vocab vault');
+    } finally {
+      setLoadingVocab(false);
+    }
+  };
+
   const handleTextSelection = () => {
     const selection = window.getSelection();
     if (selection && selection.toString().length > 0) {
@@ -248,6 +270,9 @@ const StudentManager = () => {
                     </td>
                     <td className="px-5 py-4 text-right">
                       <div className="flex items-center justify-end space-x-1">
+                        <button onClick={() => handleViewVocabVault(s.id, s.full_name || s.username)} className="p-2 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="View Vocab Vault">
+                          <Library size={16} />
+                        </button>
                         <button onClick={() => toggleAssignments(s.id)} className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="View Assignments">
                           <Eye size={16} />
                         </button>
@@ -848,6 +873,69 @@ const StudentManager = () => {
         cancelText="Cancel"
         isDestructive={true}
       />
+      {/* Vocab Vault Modal */}
+      {showVocabModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-center items-center p-4 z-50">
+          <div className="bg-white rounded-3xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center p-6 border-b border-slate-100">
+              <div>
+                <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                  <Library className="text-purple-500" />
+                  Vocab Vault: {vocabStudentName}
+                </h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  Words saved by {vocabStudentName} during their practices
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowVocabModal(false)}
+                className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto bg-slate-50 flex-1">
+              {loadingVocab ? (
+                <div className="flex justify-center p-8">
+                  <Loader2 className="animate-spin text-purple-500" size={32} />
+                </div>
+              ) : vocabData.length === 0 ? (
+                <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 border-dashed">
+                  <Library className="mx-auto text-slate-300 mb-3" size={48} />
+                  <p className="text-slate-500 font-medium">This student hasn't saved any words yet.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {vocabData.map(item => (
+                    <div key={item.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex gap-4">
+                      <button 
+                        onClick={() => speakNatural(item.word)}
+                        className="w-10 h-10 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 hover:bg-purple-100 hover:scale-105 active:scale-95 transition-all"
+                      >
+                        <Volume2 size={18} />
+                      </button>
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-bold text-slate-800 text-lg capitalize">{item.word}</h3>
+                          {item.type && (
+                            <span className="text-xs font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">
+                              {item.type}
+                            </span>
+                          )}
+                        </div>
+                        {item.ipa && <p className="text-sm font-medium text-purple-600 mb-2">{item.ipa}</p>}
+                        <p className="text-sm text-slate-600 whitespace-pre-wrap">{item.meaning}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
