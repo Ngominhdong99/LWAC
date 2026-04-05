@@ -1,7 +1,7 @@
 """
 Chat Router — AI assistant chat (persistent) + persistent coach-student messaging + ask-teacher.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
@@ -10,6 +10,7 @@ from datetime import datetime
 from .. import models
 from ..database import get_db
 from ..services.chat import chat_with_assistant
+from ..services.email import send_chat_reply_email
 from datetime import timedelta
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
@@ -109,7 +110,7 @@ def get_ai_chat_history(
 
 # ── Persistent Coach-Student Chat ────────────────────────────────
 @router.post("/send", response_model=ChatMessageOut)
-def send_message(req: SendMessageRequest, db: Session = Depends(get_db)):
+def send_message(req: SendMessageRequest, bg_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     msg = models.ChatMessage(
         sender_id=req.sender_id,
         receiver_id=req.receiver_id,
@@ -119,6 +120,18 @@ def send_message(req: SendMessageRequest, db: Session = Depends(get_db)):
     db.add(msg)
     db.commit()
     db.refresh(msg)
+    
+    # Notify if sender is coach
+    sender = db.query(models.User).filter(models.User.id == req.sender_id).first()
+    if sender and sender.role == "coach":
+        receiver = db.query(models.User).filter(models.User.id == req.receiver_id).first()
+        if receiver and receiver.email:
+            bg_tasks.add_task(
+                send_chat_reply_email,
+                receiver.email,
+                receiver.full_name or receiver.username
+            )
+            
     return msg
 
 

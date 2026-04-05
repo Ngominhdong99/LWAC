@@ -1,7 +1,7 @@
 """
 Coach Router — student management, view results, answer questions.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body, BackgroundTasks
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 from pydantic import BaseModel
@@ -10,6 +10,7 @@ from datetime import datetime
 
 from .. import models
 from ..database import get_db
+from ..services.email import send_assignment_email, send_question_reply_email
 
 router = APIRouter(prefix="/coach", tags=["Coach"])
 
@@ -212,7 +213,7 @@ def get_assignments(student_id: int, db: Session = Depends(get_db)):
     return out
 
 @router.post("/students/{student_id}/assignments", response_model=AssignmentOut)
-def assign_test(student_id: int, req: AssignRequest, db: Session = Depends(get_db)):
+def assign_test(student_id: int, req: AssignRequest, bg_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     # Find the first coach user dynamically
     coach = db.query(models.User).filter(models.User.role == "coach").first()
     coach_id = coach.id if coach else 1
@@ -226,6 +227,17 @@ def assign_test(student_id: int, req: AssignRequest, db: Session = Depends(get_d
     db.commit()
     db.refresh(a)
     lesson = db.query(models.Lesson).filter(models.Lesson.id == a.lesson_id).first()
+    student = db.query(models.User).filter(models.User.id == student_id).first()
+    
+    if student and student.email:
+        bg_tasks.add_task(
+            send_assignment_email,
+            student.email,
+            student.full_name or student.username,
+            lesson.title if lesson else "Unknown",
+            lesson.type if lesson else "Unknown"
+        )
+        
     return AssignmentOut(
         id=a.id, lesson_id=a.lesson_id, lesson_title=lesson.title if lesson else "Unknown",
         lesson_type=lesson.type if lesson else "", status=a.status,
@@ -297,7 +309,7 @@ def list_questions(status: Optional[str] = None, db: Session = Depends(get_db)):
 
 
 @router.put("/questions/{question_id}/answer")
-def answer_question(question_id: int, req: AnswerRequest, db: Session = Depends(get_db)):
+def answer_question(question_id: int, req: AnswerRequest, bg_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     tq = db.query(models.TeacherQuestion).filter(models.TeacherQuestion.id == question_id).first()
     if not tq:
         raise HTTPException(status_code=404, detail="Question not found")
@@ -305,6 +317,15 @@ def answer_question(question_id: int, req: AnswerRequest, db: Session = Depends(
     tq.status = "answered"
     tq.answered_at = datetime.utcnow()
     db.commit()
+    
+    if tq.student and tq.student.email:
+        bg_tasks.add_task(
+            send_question_reply_email,
+            tq.student.email,
+            tq.student.full_name or tq.student.username,
+            tq.question_text
+        )
+        
     return {"message": "Question answered", "id": tq.id}
 
 

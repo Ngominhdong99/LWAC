@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
 
 from .. import models, schemas
 from ..database import get_db
+from ..services.email import send_feedback_email
 
 router = APIRouter(
     prefix="/results",
@@ -126,7 +127,7 @@ def create_result(user_id: int, result: schemas.ResultCreate, db: Session = Depe
     return db_result
 
 @router.put("/{result_id}", response_model=schemas.ResultResponse)
-def update_result(result_id: int, result_update: schemas.ResultUpdate, db: Session = Depends(get_db)):
+def update_result(result_id: int, result_update: schemas.ResultUpdate, bg_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     db_result = db.query(models.Result).filter(models.Result.id == result_id).first()
     if not db_result:
         raise HTTPException(status_code=404, detail="Result not found")
@@ -169,4 +170,15 @@ def update_result(result_id: int, result_update: schemas.ResultUpdate, db: Sessi
     db.commit()
     db.refresh(db_result)
     
+    # Send email notification to user if this is a writing/speaking grading update and they have an email
+    if lesson and lesson.type in ("writing", "speaking"):
+        student = db.query(models.User).filter(models.User.id == db_result.user_id).first()
+        if student and student.email:
+            bg_tasks.add_task(
+                send_feedback_email,
+                student.email,
+                student.full_name or student.username,
+                lesson.title
+            )
+
     return db_result
