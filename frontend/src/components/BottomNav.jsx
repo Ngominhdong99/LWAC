@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { MoreHorizontal, X } from 'lucide-react';
+import UnreadBadge from './UnreadBadge';
 
-const BottomNav = ({ navItems = [], unreadCount = 0 }) => {
+const BottomNav = ({ navItems = [], user }) => {
   const [showMore, setShowMore] = useState(false);
   
   // Show first 4 items + "More" if there are more than 5
@@ -40,11 +41,7 @@ const BottomNav = ({ navItems = [], unreadCount = 0 }) => {
                   >
                     <div className="relative">
                       <Icon size={22} />
-                      {item.showBadge && unreadCount > 0 && (
-                        <span className="absolute -top-1.5 -right-2.5 bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
-                          {unreadCount > 99 ? '99+' : unreadCount}
-                        </span>
-                      )}
+                      {item.showBadge && <UnreadBadge user={user} isMobile={true} />}
                     </div>
                     <span className="text-[11px] font-medium mt-1.5">{item.label}</span>
                   </NavLink>
@@ -73,11 +70,7 @@ const BottomNav = ({ navItems = [], unreadCount = 0 }) => {
               >
                 <div className="relative">
                   <Icon size={22} />
-                  {item.showBadge && unreadCount > 0 && (
-                    <span className="absolute -top-1.5 -right-2.5 bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
-                      {unreadCount > 99 ? '99+' : unreadCount}
-                    </span>
-                  )}
+                  {item.showBadge && <UnreadBadge user={user} isMobile={true} />}
                 </div>
                 <span className="text-[10px] font-medium">{item.label}</span>
               </NavLink>

@@ -5,6 +5,7 @@ import { BookOpen, Home, Library, MessageCircle, Users, HelpCircle, LogOut, Send
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
 import API_URL from '../api';
+import UnreadBadge from './UnreadBadge';
 
 const AVATAR_COLORS = [
   '#0d9488', '#0891b2', '#2563eb', '#7c3aed', '#c026d3',
@@ -16,34 +17,10 @@ const MainLayout = () => {
   const { user, logout, isCoach, updateUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [unreadCount, setUnreadCount] = useState(0);
   const [showProfile, setShowProfile] = useState(false);
   const [profileForm, setProfileForm] = useState({ full_name: '', email: '', avatar_color: '', password: '' });
   const [saving, setSaving] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-
-  // Poll unread message count every 10 seconds
-  useEffect(() => {
-    if (!user) return;
-    const fetchUnread = async () => {
-      try {
-        const res = await axios.get(`${API_URL}/chat/unread/${user.id}`);
-        setUnreadCount(res.data.unread || 0);
-      } catch (e) { /* ignore */ }
-    };
-    fetchUnread();
-    const interval = setInterval(fetchUnread, 10000);
-    return () => clearInterval(interval);
-  }, [user]);
-
-  // Reset unread when on chat page
-  useEffect(() => {
-    const isChatPage = location.pathname === '/chat' || location.pathname === '/coach/chat';
-    if (isChatPage) {
-      const timer = setTimeout(() => setUnreadCount(0), 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [location.pathname]);
 
   // Initialize profile form when opening
   useEffect(() => {
@@ -153,11 +130,7 @@ const MainLayout = () => {
               >
                 <Icon size={20} />
                 <span className="flex-1">{item.label}</span>
-                {item.showBadge && unreadCount > 0 && (
-                  <span className="bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5 animate-pulse">
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </span>
-                )}
+                {item.showBadge && <UnreadBadge user={user} isMobile={false} />}
               </NavLink>
             );
           })}
@@ -249,9 +222,9 @@ const MainLayout = () => {
       </main>
 
       {/* Mobile Bottom Navigation */}
-      <BottomNav navItems={navItems} unreadCount={unreadCount} />
+      <BottomNav navItems={navItems} user={user} />
 
-      {/* Profile Edit Modal */}
+      {/* Profile Modal */}
       {showProfile && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
