@@ -13,7 +13,9 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     if (token) {
-      axios.get(`${API_URL}/auth/me?token=${token}`)
+      axios.get(`${API_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
         .then(res => { setUser(res.data); setLoading(false); })
         .catch(() => { logout(); setLoading(false); });
     } else {
