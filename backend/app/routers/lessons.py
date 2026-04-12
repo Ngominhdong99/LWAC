@@ -54,14 +54,63 @@ def create_questions_bulk(
         
     return db_questions
 
+@router.post("/{lesson_id}/exercises/bulk")
+def create_exercises_bulk(
+    lesson_id: int, 
+    exercises: List[schemas.ExerciseCreate] = Body(...), 
+    db: Session = Depends(get_db)
+):
+    lesson = db.query(models.Lesson).filter(models.Lesson.id == lesson_id).first()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    
+    created = []
+    for ex_data in exercises:
+        db_exercise = models.Exercise(
+            lesson_id=lesson_id,
+            order=ex_data.order,
+            title=ex_data.title,
+            context=ex_data.context,
+            image_url=ex_data.image_url
+        )
+        db.add(db_exercise)
+        db.flush()
+        
+        for q_data in ex_data.questions:
+            db_q = models.Question(
+                lesson_id=lesson_id,
+                exercise_id=db_exercise.id,
+                type=q_data.type,
+                question_text=q_data.question_text,
+                options=q_data.options if q_data.type == 'multiple_choice' else None,
+                correct_answer=q_data.correct_answer
+            )
+            db.add(db_q)
+        
+        created.append(db_exercise)
+    
+    db.commit()
+    for ex in created:
+        db.refresh(ex)
+    
+    return {"message": f"Created {len(created)} exercises", "count": len(created)}
+
 from pydantic import BaseModel
 from typing import Dict, Any, Optional
+
+class ExercisePayload(BaseModel):
+    order: int = 0
+    title: Optional[str] = None
+    context: Optional[str] = None
+    image_url: Optional[str] = None
+    questions: List[schemas.QuestionBase] = []
 
 class LessonUpdate(BaseModel):
     title: str
     chapter: str
     content: Optional[Dict[str, Any]] = None
     media_url: Optional[str] = None
+    exercises: Optional[List[ExercisePayload]] = None
 
 @router.put("/{lesson_id}", response_model=schemas.LessonResponse)
 def update_lesson(lesson_id: int, lesson_update: LessonUpdate, db: Session = Depends(get_db)):
@@ -75,6 +124,43 @@ def update_lesson(lesson_id: int, lesson_update: LessonUpdate, db: Session = Dep
         lesson.content = lesson_update.content
     if lesson_update.media_url is not None:
         lesson.media_url = lesson_update.media_url
+    
+    # Handle exercises if provided
+    if lesson_update.exercises is not None:
+        # Delete existing exercises and their questions
+        for ex in lesson.exercises:
+            db.delete(ex)
+        db.flush()
+        
+        # Also delete any standalone questions (non-exercise) for this lesson
+        db.query(models.Question).filter(
+            models.Question.lesson_id == lesson_id,
+            models.Question.exercise_id == None
+        ).delete(synchronize_session=False)
+        db.flush()
+        
+        # Create new exercises with questions
+        for ex_data in lesson_update.exercises:
+            db_exercise = models.Exercise(
+                lesson_id=lesson_id,
+                order=ex_data.order,
+                title=ex_data.title,
+                context=ex_data.context,
+                image_url=ex_data.image_url
+            )
+            db.add(db_exercise)
+            db.flush()
+            
+            for q_data in ex_data.questions:
+                db_q = models.Question(
+                    lesson_id=lesson_id,
+                    exercise_id=db_exercise.id,
+                    type=q_data.type,
+                    question_text=q_data.question_text,
+                    options=q_data.options if q_data.type == 'multiple_choice' else None,
+                    correct_answer=q_data.correct_answer
+                )
+                db.add(db_q)
         
     db.commit()
     db.refresh(lesson)
@@ -122,6 +208,9 @@ def delete_lesson(lesson_id: int, db: Session = Depends(get_db)):
     db.query(models.Assignment).filter(models.Assignment.lesson_id == lesson_id).delete(synchronize_session=False)
     db.query(models.TeacherQuestion).filter(models.TeacherQuestion.lesson_id == lesson_id).delete(synchronize_session=False)
     db.query(models.VocabVault).filter(models.VocabVault.source_lesson_id == lesson_id).update({"source_lesson_id": None}, synchronize_session=False)
+    
+    # Delete exercises (cascade will handle their questions)
+    db.query(models.Exercise).filter(models.Exercise.lesson_id == lesson_id).delete(synchronize_session=False)
     
     db.delete(lesson)
     db.commit()

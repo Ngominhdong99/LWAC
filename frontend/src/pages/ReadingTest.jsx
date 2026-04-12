@@ -397,24 +397,61 @@ const ReadingTest = () => {
         <section className="flex-1 md:w-1/2 p-4 md:p-8 bg-white md:border-r border-slate-200 shadow-sm relative overflow-y-auto">
           <div className="max-w-prose mx-auto">
             <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-6 leading-tight select-text">{lesson.title}</h2>
-            {lesson.content?.image_url && (
-              <div className="mb-6">
-                <img 
-                  src={lesson.content.image_url.startsWith('http') ? lesson.content.image_url : `${API_URL}${lesson.content.image_url}`} 
-                  alt={lesson.title} 
-                  className="w-full rounded-xl shadow-md border border-slate-200"
-                />
+            
+            {/* Exercise-based Layout */}
+            {lesson.exercises && lesson.exercises.length > 0 ? (
+              <div className="space-y-8">
+                {lesson.exercises.map((ex, exIdx) => (
+                  <div key={ex.id} className="space-y-4">
+                    {lesson.exercises.length > 1 && (
+                      <div className="flex items-center space-x-2 sticky top-0 bg-white/90 backdrop-blur-sm py-2 z-10">
+                        <span className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center text-xs font-bold shadow-sm">{exIdx + 1}</span>
+                        <h3 className="text-lg font-bold text-blue-800">{ex.title || `Exercise ${exIdx + 1}`}</h3>
+                      </div>
+                    )}
+                    {ex.image_url && (
+                      <div className="mb-4">
+                        <img 
+                          src={ex.image_url.startsWith('http') ? ex.image_url : `${API_URL}${ex.image_url}`} 
+                          alt={ex.title || `Exercise ${exIdx + 1}`}
+                          className="w-full rounded-xl shadow-md border border-slate-200"
+                        />
+                      </div>
+                    )}
+                    {ex.context && (
+                      <div className="space-y-4 text-slate-700 text-base md:text-lg leading-relaxed font-serif selection:bg-primary-200 selection:text-primary-900 select-text">
+                        <MarkdownRenderer>{ex.context}</MarkdownRenderer>
+                      </div>
+                    )}
+                    {exIdx < lesson.exercises.length - 1 && (
+                      <hr className="border-slate-200 my-6" />
+                    )}
+                  </div>
+                ))}
               </div>
+            ) : (
+              /* Old single-passage layout (backward compat) */
+              <>
+                {lesson.content?.image_url && (
+                  <div className="mb-6">
+                    <img 
+                      src={lesson.content.image_url.startsWith('http') ? lesson.content.image_url : `${API_URL}${lesson.content.image_url}`} 
+                      alt={lesson.title} 
+                      className="w-full rounded-xl shadow-md border border-slate-200"
+                    />
+                  </div>
+                )}
+                <div className="space-y-6 text-slate-700 text-base md:text-lg leading-relaxed font-serif selection:bg-primary-200 selection:text-primary-900 select-text">
+                  {lesson.content.paragraphs ? (
+                    lesson.content.paragraphs.map(p => (
+                      <p key={p.id} className="text-justify select-text">{p.text}</p>
+                    ))
+                  ) : lesson.content.passage ? (
+                    <MarkdownRenderer>{lesson.content.passage}</MarkdownRenderer>
+                  ) : null}
+                </div>
+              </>
             )}
-            <div className="space-y-6 text-slate-700 text-base md:text-lg leading-relaxed font-serif selection:bg-primary-200 selection:text-primary-900 select-text">
-              {lesson.content.paragraphs ? (
-                lesson.content.paragraphs.map(p => (
-                  <p key={p.id} className="text-justify select-text">{p.text}</p>
-                ))
-              ) : lesson.content.passage ? (
-                <MarkdownRenderer>{lesson.content.passage}</MarkdownRenderer>
-              ) : null}
-            </div>
           </div>
           
           {/* Floating Action Menu for Text Selection */}
@@ -471,9 +508,23 @@ const ReadingTest = () => {
               Questions 1-{lesson.questions.length}
             </h3>
 
+            {/* Exercise-grouped questions */}
+            {lesson.exercises && lesson.exercises.length > 0 ? (
+              lesson.exercises.map((ex, exIdx) => {
+                // Get the starting question number for this exercise
+                const prevQuestionCount = lesson.exercises.slice(0, exIdx).reduce((sum, e) => sum + (e.questions?.length || 0), 0);
+                return (
+                  <div key={ex.id}>
+                    {lesson.exercises.length > 1 && (
+                      <div className="flex items-center space-x-2 mt-4 mb-3">
+                        <span className="w-6 h-6 rounded-md bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold">{exIdx + 1}</span>
+                        <h4 className="text-sm font-bold text-blue-700 uppercase tracking-wide">{ex.title || `Exercise ${exIdx + 1}`}</h4>
+                      </div>
+                    )}
+                    {(ex.questions || []).map((q, qIdx) => {
+                      const globalIdx = prevQuestionCount + qIdx;
+                      const hasInlineBlanks = (q.type === 'fill_blank' || q.type === 'written_answer') && /(_{2,}|\.{3,})/.test(q.question_text || '');
 
-            {lesson.questions.map((q, idx) => {
-              const hasInlineBlanks = (q.type === 'fill_blank' || q.type === 'written_answer') && /(_{2,}|\.{3,})/.test(q.question_text || '');
               
               const renderInlineText = () => {
                 if (!hasInlineBlanks) return q.question_text;
@@ -651,6 +702,223 @@ const ReadingTest = () => {
               </div>
               );
             })}
+                  </div>
+                );
+              })
+            ) : (
+              /* Old un-grouped questions (backward compat) */
+              lesson.questions.map((q, idx) => {
+                const globalIdx = idx;
+                const hasInlineBlanks = (q.type === 'fill_blank' || q.type === 'written_answer') && /(_{2,}|\.{3,})/.test(q.question_text || '');
+                
+                const renderInlineText = () => {
+                  if (!hasInlineBlanks) return q.question_text;
+                  
+                  const parts = (q.question_text || '').split(/(_{2,}|\.{3,})/g);
+                  let blankIndex = 0;
+                  const blankCount = getBlankCount(q.correct_answer);
+                  const correctParts = (q.correct_answer || '').split(';').map(p => p.trim());
+
+                  return parts.map((part, bIdx) => {
+                    if (/^_{2,}$|^\.{3,}$/.test(part)) {
+                      const currentBIdx = blankIndex++;
+                      const userVal = getBlankAnswerPart(fillAnswers[q.id], currentBIdx);
+                      const correctPart = correctParts[currentBIdx] || '';
+                      const isBlankCorrect = checkWrittenAnswer(userVal, correctPart);
+                      const isBlankWrong = result !== null && !isBlankCorrect;
+
+                      return (
+                        <span key={bIdx} className="inline-block mx-1">
+                          <input
+                            type="text"
+                            value={userVal}
+                            onChange={(e) => {
+                              if (result || isViewMode) return;
+                              const currentVals = (fillAnswers[q.id] || '').split(';');
+                              while (currentVals.length < blankCount) currentVals.push('');
+                              currentVals[currentBIdx] = e.target.value;
+                              setFillAnswers({ ...fillAnswers, [q.id]: currentVals.join(' ; ') });
+                            }}
+                            disabled={result !== null || isViewMode}
+                            placeholder={`${globalIdx + 1}.${currentBIdx + 1}`}
+                            className={`w-32 px-2 py-1 text-center font-bold text-primary-800 border-b-2 bg-transparent transition-all focus:outline-none focus:border-primary-500 placeholder:text-primary-300 placeholder:font-normal ${
+                              result !== null
+                                ? isBlankCorrect
+                                  ? 'border-green-500 text-green-700'
+                                  : 'border-red-500 text-red-700'
+                                : 'border-slate-300 hover:border-primary-400'
+                            }`}
+                          />
+                          {isBlankWrong && (
+                            <span className="absolute -mt-5 bg-white border border-red-200 text-red-600 text-[10px] px-1.5 py-0.5 rounded shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                              {correctPart.split('|').map(a => a.trim()).join(' / ')}
+                            </span>
+                          )}
+                        </span>
+                      );
+                    }
+                    return <span key={bIdx}>{part}</span>;
+                  });
+                };
+
+                return (
+                  <div key={q.id} id={`question-${q.id}`} className="group scroll-mt-24 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-all">
+                    <div className="flex gap-4">
+                      <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold shrink-0 shadow-sm text-sm ${
+                        result !== null
+                          ? q.type === 'multiple_choice' 
+                            ? answers[q.id] === q.correct_answer ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                            : checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer) ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                          : (answers[q.id] || fillAnswers[q.id]) ? 'bg-primary-100 text-primary-700' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {globalIdx + 1}
+                      </span>
+                      <div className="flex-1 w-full overflow-hidden">
+                        {(q.type !== 'fill_blank' || !hasInlineBlanks) && (
+                          <div className="text-base text-slate-800 font-semibold mb-4 leading-relaxed">{q.question_text}</div>
+                        )}
+
+                        {(() => {
+                          if (hasInlineBlanks) {
+                            return (
+                              <div className="text-base text-slate-800 font-medium leading-[2.5rem] p-4 bg-slate-50/50 rounded-xl border border-slate-100 text-justify">
+                                {renderInlineText()}
+                              </div>
+                            );
+                          }
+
+                          const isMultiBlank = q.correct_answer?.includes(';');
+
+                          if (q.type === 'multiple_choice') {
+                            return (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+                                {Object.entries(q.options || {}).map(([key, val]) => {
+                                  const isSelected = answers[q.id] === key;
+                                  const isCorrect = key === q.correct_answer;
+                                  const showCorrect = result !== null && isCorrect;
+                                  const showWrong = result !== null && isSelected && !isCorrect;
+
+                                  return (
+                                    <button
+                                      key={key}
+                                      onClick={() => handleAnswerSelect(q.id, key)}
+                                      disabled={result !== null || isViewMode}
+                                      className={`flex items-start text-left p-3 rounded-xl border-2 transition-all group/opt ${
+                                        showCorrect ? 'bg-green-50 border-green-500 shadow-sm'
+                                          : showWrong ? 'bg-red-50 border-red-500 shadow-sm'
+                                          : isSelected ? 'bg-primary-50 border-primary-500 shadow-sm'
+                                          : 'border-slate-100 bg-white hover:border-slate-300 hover:bg-slate-50'
+                                      }`}
+                                    >
+                                      <span className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 mr-3 transition-colors ${
+                                        showCorrect ? 'bg-green-500 text-white'
+                                          : showWrong ? 'bg-red-500 text-white'
+                                          : isSelected ? 'bg-primary-500 text-white'
+                                          : 'bg-slate-100 text-slate-600 group-hover/opt:bg-slate-200'
+                                      }`}>
+                                        {key}
+                                      </span>
+                                      <span className={`text-sm mt-0.5 font-medium leading-tight ${
+                                        showCorrect ? 'text-green-900' : showWrong ? 'text-red-900' : isSelected ? 'text-primary-900' : 'text-slate-700'
+                                      }`}>{val}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div className="space-y-3 relative mt-4">
+                              {isMultiBlank ? (
+                                (q.correct_answer || '').split(';').map((correctPart, bIdx) => {
+                                  const userVal = getBlankAnswerPart(fillAnswers[q.id], bIdx);
+                                  const isBlankCorrect = checkWrittenAnswer(userVal, correctPart);
+                                  const isBlankWrong = result !== null && !isBlankCorrect;
+
+                                  return (
+                                    <div key={bIdx} className="relative">
+                                      <div className="absolute left-3 top-3 text-xs font-bold text-slate-400">Blank {bIdx + 1}</div>
+                                      <input
+                                        type="text"
+                                        placeholder={`Answer ${bIdx + 1}`}
+                                        value={userVal}
+                                        onChange={(e) => {
+                                          if (result || isViewMode) return;
+                                          const currentVals = (fillAnswers[q.id] || '').split(';');
+                                          const blankCount = getBlankCount(q.correct_answer);
+                                          while (currentVals.length < blankCount) currentVals.push('');
+                                          currentVals[bIdx] = e.target.value;
+                                          setFillAnswers({ ...fillAnswers, [q.id]: currentVals.join(' ; ') });
+                                        }}
+                                        disabled={result !== null || isViewMode}
+                                        className={`w-full pl-16 pr-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 ${
+                                          isBlankCorrect ? 'border-green-500 bg-green-50 text-green-800'
+                                            : isBlankWrong ? 'border-red-500 bg-red-50 text-red-800'
+                                            : 'border-slate-200 bg-white'
+                                        }`}
+                                      />
+                                      {isBlankWrong && (
+                                        <p className="text-sm text-green-600 mt-0.5 font-medium">
+                                          Correct: {correctPart.split('|').map(a => a.trim()).join(' / ')}
+                                        </p>
+                                      )}
+                                    </div>
+                                  );
+                                })
+                              ) : q.type === 'written_answer' ? (
+                                <textarea
+                                  placeholder="Type your answer here..."
+                                  rows={3}
+                                  value={fillAnswers[q.id] || ''}
+                                  onChange={(e) => handleFillChange(q.id, e.target.value)}
+                                  disabled={result !== null || isViewMode}
+                                  className={`w-full px-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 resize-y ${
+                                    result !== null
+                                      ? checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer)
+                                        ? 'border-green-500 bg-green-50 text-green-800'
+                                        : 'border-red-500 bg-red-50 text-red-800'
+                                      : 'border-slate-200 bg-white'
+                                  }`}
+                                />
+                              ) : (
+                                <input
+                                  type="text"
+                                  placeholder="Type your answer..."
+                                  value={fillAnswers[q.id] || ''}
+                                  onChange={(e) => handleFillChange(q.id, e.target.value)}
+                                  disabled={result !== null || isViewMode}
+                                  className={`w-full px-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 ${
+                                    result !== null
+                                      ? checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer)
+                                        ? 'border-green-500 bg-green-50 text-green-800'
+                                        : 'border-red-500 bg-red-50 text-red-800'
+                                      : 'border-slate-200 bg-white'
+                                  }`}
+                                />
+                              )}
+                              {!isMultiBlank && result !== null && !checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer) && (
+                                <p className="text-sm text-green-600 mt-1 font-medium">Correct answer: {q.correct_answer.split('|').map(a => a.trim()).join(' / ')}</p>
+                              )}
+                            </div>
+                          );
+                        })()}
+
+                        {/* Coach note for this question */}
+                        {coachFeedback?.[String(q.id)] && (
+                          <div className="pl-9 mt-3">
+                            <div className="bg-primary-50 border border-primary-200 rounded-xl p-4">
+                              <p className="text-xs font-bold text-primary-700 uppercase tracking-wider mb-1">💬 Coach's Note</p>
+                              <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{coachFeedback[String(q.id)]}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
 
           {/* Bottom Action Bar */}

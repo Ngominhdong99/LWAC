@@ -54,10 +54,14 @@ const LessonBuilder = () => {
   // Questions Array (Reading & Listening only)
   const [questions, setQuestions] = useState([]);
 
+  // Exercises Array (Reading only)
+  const [exercises, setExercises] = useState([]);
+
   // AI Parse Questions State
   const [showAiParsePanel, setShowAiParsePanel] = useState(false);
   const [aiParseText, setAiParseText] = useState('');
   const [isParsingQuestions, setIsParsingQuestions] = useState(false);
+  const [activeExerciseIdx, setActiveExerciseIdx] = useState(null); // which exercise AI parse targets
 
   useEffect(() => {
     const fetchLesson = async () => {
@@ -70,7 +74,43 @@ const LessonBuilder = () => {
         setChapter(data.chapter || '');
         setLessonType(data.type || 'reading');
         
-        if (data.type === 'reading' || data.type === 'listening') {
+        if (data.type === 'reading') {
+          setPassageText(data.content?.passage || '');
+          setExistingImageUrl(data.content?.image_url || '');
+          // Load exercises if they exist
+          if (data.exercises && data.exercises.length > 0) {
+            setExercises(data.exercises.map(ex => ({
+              _id: ex.id || Date.now() + Math.random(),
+              order: ex.order,
+              title: ex.title || '',
+              context: ex.context || '',
+              image_url: ex.image_url || '',
+              questions: (ex.questions || []).map(q => ({
+                id: q.id || Date.now() + Math.random(),
+                type: q.type,
+                question_text: q.question_text,
+                options: q.options || { A: '', B: '', C: '', D: '' },
+                correct_answer: q.correct_answer
+              }))
+            })));
+          } else if (data.questions && data.questions.length > 0) {
+            // Backward compat: old lesson with no exercises — put all in a single exercise
+            setExercises([{
+              _id: Date.now(),
+              order: 0,
+              title: 'Exercise 1',
+              context: data.content?.passage || '',
+              image_url: data.content?.image_url || '',
+              questions: data.questions.map(q => ({
+                id: q.id,
+                type: q.type,
+                question_text: q.question_text,
+                options: q.options || { A: '', B: '', C: '', D: '' },
+                correct_answer: q.correct_answer
+              }))
+            }]);
+          }
+        } else if (data.type === 'listening') {
           setPassageText(data.content?.passage || '');
           setExistingImageUrl(data.content?.image_url || '');
           setExistingVideoUrl(data.content?.video_url || '');
@@ -212,12 +252,14 @@ const LessonBuilder = () => {
         media_url = await handleMediaUpload(audioFile, 'audio');
       }
 
-      // Image: URL input takes priority, then file upload, then existing
+      // Image: URL input takes priority, then file upload, then existing (for listening only now)
       let image_url = existingImageUrl || null;
-      if (imageUrlInput.trim()) {
-        image_url = imageUrlInput.trim();
-      } else if (imageFile) {
-        image_url = await handleMediaUpload(imageFile, 'image');
+      if (lessonType !== 'reading') {
+        if (imageUrlInput.trim()) {
+          image_url = imageUrlInput.trim();
+        } else if (imageFile) {
+          image_url = await handleMediaUpload(imageFile, 'image');
+        }
       }
 
       // Video: URL input takes priority, then file upload, then existing
@@ -231,7 +273,7 @@ const LessonBuilder = () => {
       // Build specific content payload based on type
       let content = {};
       if (lessonType === 'reading') {
-         content = { passage: passageText, image_url };
+         content = { passage: passageText }; // exercises hold their own context/images
       } else if (lessonType === 'listening') {
          content = { passage: passageText, image_url, video_url };
       } else if (lessonType === 'writing') {
@@ -246,19 +288,36 @@ const LessonBuilder = () => {
          };
       }
 
+      // Build exercises payload for reading
+      const exercisesPayload = lessonType === 'reading' && exercises.length > 0
+        ? exercises.map((ex, idx) => ({
+            order: idx,
+            title: ex.title || `Exercise ${idx + 1}`,
+            context: ex.context || '',
+            image_url: ex.image_url || null,
+            questions: (ex.questions || []).map(q => ({
+              type: q.type,
+              question_text: q.question_text,
+              options: q.type === 'multiple_choice' ? q.options : null,
+              correct_answer: q.correct_answer
+            }))
+          }))
+        : null;
+
       const lessonPayload = {
         title,
         chapter,
         type: lessonType,
         content,
-        media_url
+        media_url,
+        ...(exercisesPayload ? { exercises: exercisesPayload } : {})
       };
 
       if (id) {
         // Edit Mode
         await axios.put(`${API_URL}/lessons/${id}`, lessonPayload);
         
-        if (lessonType === 'reading' || lessonType === 'listening') {
+        if (lessonType === 'listening') {
           const questionsPayload = questions.map(q => ({
              type: q.type,
              question_text: q.question_text,
@@ -274,7 +333,9 @@ const LessonBuilder = () => {
         const lessonRes = await axios.post(`${API_URL}/lessons/`, lessonPayload);
         const newLessonId = lessonRes.data.id;
 
-        if ((lessonType === 'reading' || lessonType === 'listening') && questions.length > 0) {
+        if (lessonType === 'reading' && exercisesPayload && exercisesPayload.length > 0) {
+          await axios.post(`${API_URL}/lessons/${newLessonId}/exercises/bulk`, exercisesPayload);
+        } else if (lessonType === 'listening' && questions.length > 0) {
           const questionsPayload = questions.map(q => ({
              type: q.type,
              question_text: q.question_text,
@@ -290,6 +351,7 @@ const LessonBuilder = () => {
         setPassageText('');
         setAudioFile(null);
         setQuestions([]);
+        setExercises([]);
         setTask1Min(150);
         setTask2Min(250);
       }
@@ -359,8 +421,8 @@ const LessonBuilder = () => {
         {/* Dynamic Builder Core */}
         <hr className="border-slate-100" />
         
-        {/* Image (Reading + Listening) */}
-        {(lessonType === 'reading' || lessonType === 'listening') && (
+        {/* Image (Listening only — Reading uses per-exercise images) */}
+        {lessonType === 'listening' && (
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center space-x-2">
               <Image size={16} /> <span>Image</span>
@@ -571,10 +633,10 @@ const LessonBuilder = () => {
           </div>
         )}
 
-        {(lessonType === 'reading' || lessonType === 'writing' || lessonType === 'listening' || lessonType === 'speaking') && (
+        {(lessonType === 'writing' || lessonType === 'listening' || lessonType === 'speaking') && (
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center justify-between">
-              <span>{lessonType === 'writing' ? 'Writing Task Prompt' : lessonType === 'speaking' ? 'Speaking Prompt/Questions' : 'Reading/Context Passage'}</span>
+              <span>{lessonType === 'writing' ? 'Writing Task Prompt' : lessonType === 'speaking' ? 'Speaking Prompt/Questions' : 'Listening Context/Passage'}</span>
               <button
                   type="button"
                   onClick={() => setShowAiPanel(!showAiPanel)}
@@ -707,14 +769,322 @@ const LessonBuilder = () => {
           </div>
         )}
 
-        {/* Questions Builder */}
-        {(lessonType === 'reading' || lessonType === 'listening') && (
+        {/* ═══════ READING: Exercise Builder ═══════ */}
+        {lessonType === 'reading' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-800 text-lg">Exercises ({exercises.length})</h3>
+              <button 
+                onClick={() => setExercises([...exercises, {
+                  _id: Date.now(),
+                  order: exercises.length,
+                  title: `Exercise ${exercises.length + 1}`,
+                  context: '',
+                  image_url: '',
+                  questions: []
+                }])}
+                className="flex items-center space-x-1 text-sm bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors font-semibold shadow-sm"
+              >
+                <Plus size={16} /> <span>Add Exercise</span>
+              </button>
+            </div>
+
+            {exercises.length === 0 && (
+              <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-xl">
+                <p className="text-slate-500 text-sm">No exercises yet. Click "Add Exercise" to create the first exercise section.</p>
+              </div>
+            )}
+
+            {exercises.map((ex, exIdx) => (
+              <div key={ex._id} className="border-2 border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm">
+                {/* Exercise Header */}
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-5 py-4 flex items-center justify-between border-b border-slate-200">
+                  <div className="flex items-center space-x-3 flex-1">
+                    <span className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center text-sm font-bold shadow-sm">{exIdx + 1}</span>
+                    <input
+                      value={ex.title}
+                      onChange={e => {
+                        const newExercises = [...exercises];
+                        newExercises[exIdx] = { ...ex, title: e.target.value };
+                        setExercises(newExercises);
+                      }}
+                      className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-semibold bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder={`Exercise ${exIdx + 1}`}
+                    />
+                  </div>
+                  <button
+                    onClick={() => setExercises(exercises.filter((_, i) => i !== exIdx))}
+                    className="ml-3 p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Remove Exercise"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+
+                <div className="p-5 space-y-4">
+                  {/* Exercise Image */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase flex items-center space-x-1">
+                      <Image size={14} /> <span>Image (optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={ex.image_url}
+                      onChange={e => {
+                        const newExercises = [...exercises];
+                        newExercises[exIdx] = { ...ex, image_url: e.target.value };
+                        setExercises(newExercises);
+                      }}
+                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Paste image URL for this exercise..."
+                    />
+                    {ex.image_url && (
+                      <img src={ex.image_url.startsWith('http') ? ex.image_url : `${API_URL}${ex.image_url}`} alt="exercise" className="mt-2 max-h-32 rounded-lg border" />
+                    )}
+                  </div>
+
+                  {/* Exercise Context / Passage */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase">Context / Passage</label>
+                    <textarea
+                      value={ex.context}
+                      onChange={e => {
+                        const newExercises = [...exercises];
+                        newExercises[exIdx] = { ...ex, context: e.target.value };
+                        setExercises(newExercises);
+                      }}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm min-h-[120px] focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter the context passage or instructions for this exercise..."
+                    />
+                  </div>
+
+                  {/* Exercise Questions */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-bold text-slate-700">Questions ({ex.questions.length})</h4>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => {
+                            setActiveExerciseIdx(exIdx);
+                            setShowAiParsePanel(true);
+                          }}
+                          className="flex items-center space-x-1 text-xs px-2.5 py-1.5 rounded-lg bg-violet-50 text-violet-600 hover:bg-violet-100 border border-violet-100 font-medium transition-colors"
+                        >
+                          <Sparkles size={13} /> <span>Import</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            const newExercises = [...exercises];
+                            newExercises[exIdx] = {
+                              ...ex,
+                              questions: [...ex.questions, {
+                                id: Date.now() + Math.random(),
+                                type: 'multiple_choice',
+                                question_text: '',
+                                options: { A: '', B: '', C: '', D: '' },
+                                correct_answer: 'A'
+                              }]
+                            };
+                            setExercises(newExercises);
+                          }}
+                          className="flex items-center space-x-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1.5 rounded-lg transition-colors font-medium"
+                        >
+                          <Plus size={13} /> <span>Add</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {ex.questions.map((q, qIdx) => (
+                      <div key={q.id} className="p-3 rounded-xl border border-slate-200 bg-slate-50 relative">
+                        <button
+                          onClick={() => {
+                            const newExercises = [...exercises];
+                            newExercises[exIdx] = {
+                              ...ex,
+                              questions: ex.questions.filter((_, i) => i !== qIdx)
+                            };
+                            setExercises(newExercises);
+                          }}
+                          className="absolute top-3 right-3 text-slate-400 hover:text-red-500"
+                        >
+                          <X size={14} />
+                        </button>
+                        
+                        <div className="flex gap-3">
+                          <span className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600 shrink-0 mt-1">
+                            {qIdx + 1}
+                          </span>
+                          <div className="flex-1 space-y-2">
+                            <select 
+                              value={q.type}
+                              onChange={e => {
+                                const newExercises = [...exercises];
+                                newExercises[exIdx].questions[qIdx] = { ...q, type: e.target.value };
+                                setExercises([...newExercises]);
+                              }}
+                              className="text-xs border border-slate-200 rounded-md px-2 py-1 bg-white font-medium"
+                            >
+                              <option value="multiple_choice">Multiple Choice</option>
+                              <option value="fill_blank">Fill in the Blank</option>
+                              <option value="written_answer">Written Answer</option>
+                            </select>
+
+                            <input 
+                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm"
+                              placeholder="Question text..."
+                              value={q.question_text}
+                              onChange={e => {
+                                const newExercises = [...exercises];
+                                newExercises[exIdx].questions[qIdx] = { ...q, question_text: e.target.value };
+                                setExercises([...newExercises]);
+                              }}
+                            />
+
+                            {q.type === 'multiple_choice' ? (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                {['A', 'B', 'C', 'D'].map(opt => (
+                                  <div key={opt} className="flex items-center space-x-2">
+                                    <span className="font-bold text-slate-500 w-4 text-xs">{opt}</span>
+                                    <input 
+                                      className="flex-1 px-2 py-1 border border-slate-200 rounded-md text-xs"
+                                      value={q.options?.[opt] || ''}
+                                      onChange={e => {
+                                        const newExercises = [...exercises];
+                                        newExercises[exIdx].questions[qIdx] = {
+                                          ...q,
+                                          options: { ...q.options, [opt]: e.target.value }
+                                        };
+                                        setExercises([...newExercises]);
+                                      }}
+                                      placeholder={`Option ${opt}`}
+                                    />
+                                  </div>
+                                ))}
+                                <div className="col-span-1 md:col-span-2 mt-1 pt-1 border-t border-slate-200 flex items-center">
+                                  <span className="text-xs font-medium text-slate-600 mr-2">Correct:</span>
+                                  <select 
+                                    value={q.correct_answer} 
+                                    onChange={e => {
+                                      const newExercises = [...exercises];
+                                      newExercises[exIdx].questions[qIdx] = { ...q, correct_answer: e.target.value };
+                                      setExercises([...newExercises]);
+                                    }}
+                                    className="border border-slate-200 rounded text-xs px-2 py-1 bg-white"
+                                  >
+                                    <option value="A">A</option>
+                                    <option value="B">B</option>
+                                    <option value="C">C</option>
+                                    <option value="D">D</option>
+                                  </select>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="pt-1 border-t border-slate-200">
+                                <label className="block text-[10px] font-semibold text-slate-500 mb-1 uppercase">Correct Answer(s)</label>
+                                <input 
+                                  className="w-full px-2 py-1 border border-slate-200 rounded-md text-xs font-bold text-green-700 bg-green-50"
+                                  value={q.correct_answer}
+                                  onChange={e => {
+                                    const newExercises = [...exercises];
+                                    newExercises[exIdx].questions[qIdx] = { ...q, correct_answer: e.target.value };
+                                    setExercises([...newExercises]);
+                                  }}
+                                  placeholder="e.g. answer1 | alt1 ; answer2"
+                                />
+                                <p className="text-[10px] text-slate-400 mt-0.5">Use <b>|</b> for alternatives, <b>;</b> for multiple blanks</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {ex.questions.length === 0 && (
+                      <div className="text-center py-4 border border-dashed border-slate-200 rounded-lg">
+                        <p className="text-slate-400 text-xs">No questions in this exercise yet.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* AI Parse Panel for Exercises */}
+            {showAiParsePanel && activeExerciseIdx !== null && (
+              <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl overflow-hidden">
+                  <div className="flex justify-between items-center p-5 border-b border-slate-100">
+                    <div className="flex items-center space-x-2 text-violet-700">
+                      <Sparkles size={20} />
+                      <h4 className="font-bold">AI Question Import → {exercises[activeExerciseIdx]?.title || `Exercise ${activeExerciseIdx + 1}`}</h4>
+                    </div>
+                    <button onClick={() => { setShowAiParsePanel(false); setActiveExerciseIdx(null); }} className="text-slate-400 hover:text-slate-600">
+                      <X size={20} />
+                    </button>
+                  </div>
+                  <div className="p-5 space-y-3">
+                    <p className="text-xs text-violet-600 uppercase tracking-wide font-semibold">Paste raw text containing questions, options, and answers.</p>
+                    <textarea
+                      value={aiParseText}
+                      onChange={e => setAiParseText(e.target.value)}
+                      className="w-full px-3 py-2 border border-violet-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-400 focus:border-transparent min-h-[150px]"
+                      placeholder={`e.g. 1. What is the capital of France?\nA) London\nB) Paris\nC) Rome\nAnswer: B`}
+                    />
+                    <button
+                      onClick={async () => {
+                        if (!aiParseText.trim()) return;
+                        setIsParsingQuestions(true);
+                        try {
+                          const res = await axios.post(`${API_URL}/coach/ai-parse-questions`, { raw_text: aiParseText });
+                          if (res.data.questions && res.data.questions.length > 0) {
+                            const newQuestions = res.data.questions.map((q, i) => ({ ...q, id: Date.now() + i }));
+                            const newExercises = [...exercises];
+                            newExercises[activeExerciseIdx] = {
+                              ...newExercises[activeExerciseIdx],
+                              questions: [...newExercises[activeExerciseIdx].questions, ...newQuestions]
+                            };
+                            setExercises(newExercises);
+                            toast.success(`Added ${newQuestions.length} questions to ${exercises[activeExerciseIdx]?.title}!`);
+                            setShowAiParsePanel(false);
+                            setActiveExerciseIdx(null);
+                            setAiParseText('');
+                          } else {
+                            toast.error(res.data.error || 'No questions could be extracted.');
+                          }
+                        } catch (err) {
+                          toast.error('Failed to parse questions.');
+                        } finally {
+                          setIsParsingQuestions(false);
+                        }
+                      }}
+                      disabled={isParsingQuestions || !aiParseText.trim()}
+                      className={`w-full flex items-center justify-center py-2.5 rounded-lg text-sm font-bold transition-all shadow-sm ${
+                        isParsingQuestions || !aiParseText.trim()
+                          ? 'bg-violet-200 text-violet-400 cursor-not-allowed'
+                          : 'bg-violet-600 text-white hover:bg-violet-700'
+                      }`}
+                    >
+                      {isParsingQuestions ? (
+                        <><Loader2 size={16} className="animate-spin mr-2" /> Extracting...</>
+                      ) : (
+                        <><Sparkles size={16} className="mr-2" /> Extract & Import</>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ═══════ LISTENING: Flat Questions Builder ═══════ */}
+        {lessonType === 'listening' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-slate-800">Questions ({questions.length})</h3>
               <div className="flex space-x-2">
                 <button
-                  onClick={() => setShowAiParsePanel(!showAiParsePanel)}
+                  onClick={() => { setActiveExerciseIdx(null); setShowAiParsePanel(!showAiParsePanel); }}
                   className={`flex items-center space-x-1 text-sm px-3 py-1.5 rounded-lg transition-colors font-medium border ${showAiParsePanel ? 'bg-violet-100 text-violet-700 border-violet-200' : 'bg-white text-violet-600 hover:bg-violet-50 border-violet-100 shadow-sm'}`}
                 >
                   <Sparkles size={16} /> <span className="hidden sm:inline">Import</span>
@@ -728,8 +1098,8 @@ const LessonBuilder = () => {
               </div>
             </div>
 
-            {/* AI Question Parser Panel */}
-            {showAiParsePanel && (
+            {/* AI Question Parser Panel for Listening */}
+            {showAiParsePanel && activeExerciseIdx === null && (
               <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 mb-4 shadow-inner">
                 <div className="flex justify-between items-center mb-3">
                   <div className="flex items-center space-x-2 text-violet-700">
@@ -764,7 +1134,6 @@ const LessonBuilder = () => {
                 </button>
               </div>
             )}
-
 
             <div className="space-y-4">
               {questions.map((q, idx) => (
@@ -822,18 +1191,6 @@ const LessonBuilder = () => {
                             </select>
                           </div>
                         </div>
-                      ) : q.type === 'written_answer' ? (
-                        <div className="mt-2 pt-2 border-t border-slate-200">
-                            <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase">Accepted Answer(s)</label>
-                            <input 
-                              className="w-full px-3 py-1.5 border border-slate-200 rounded-md text-sm font-bold text-green-700 bg-green-50"
-                              value={q.correct_answer}
-                              onChange={(e) => updateQuestion(q.id, 'correct_answer', e.target.value)}
-                              placeholder="e.g. doesn't eat|does not eat ; make"
-                            />
-                            <p className="text-xs text-slate-400 mt-1">Use <b>|</b> for alternative answers. Use <b>;</b> to separate multiple blanks in one question.</p>
-                            <p className="text-xs text-slate-400">Example: <code className="bg-slate-100 px-1 rounded">doesn't eat|does not eat ; make</code> = 2 blanks, first accepts "doesn't eat" or "does not eat"</p>
-                        </div>
                       ) : (
                         <div className="mt-2 pt-2 border-t border-slate-200">
                             <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase">Correct Answer(s)</label>
@@ -841,9 +1198,9 @@ const LessonBuilder = () => {
                               className="w-full px-3 py-1.5 border border-slate-200 rounded-md text-sm font-bold text-green-700 bg-green-50"
                               value={q.correct_answer}
                               onChange={(e) => updateQuestion(q.id, 'correct_answer', e.target.value)}
-                              placeholder="e.g. doesn't eat ; make"
+                              placeholder="e.g. answer1 | alt ; answer2"
                             />
-                            <p className="text-xs text-slate-400 mt-1">Use <b>;</b> for multiple blanks. Use <b>|</b> for alternatives. E.g. <code className="bg-slate-100 px-1 rounded">ans1 ; ans2a|ans2b</code></p>
+                            <p className="text-xs text-slate-400 mt-1">Use <b>|</b> for alternatives, <b>;</b> for multiple blanks.</p>
                         </div>
                       )}
                     </div>

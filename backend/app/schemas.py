@@ -29,10 +29,28 @@ class QuestionBase(BaseModel):
     question_text: str
     options: Optional[Dict[str, Any]] = None
     correct_answer: str
+    exercise_id: Optional[int] = None
     
 class QuestionResponse(QuestionBase):
     id: int
     lesson_id: int
+    
+    class Config:
+        orm_mode = True
+
+class ExerciseBase(BaseModel):
+    order: int = 0
+    title: Optional[str] = None
+    context: Optional[str] = None
+    image_url: Optional[str] = None
+
+class ExerciseCreate(ExerciseBase):
+    questions: List[QuestionBase] = []
+
+class ExerciseResponse(ExerciseBase):
+    id: int
+    lesson_id: int
+    questions: List[QuestionResponse] = []
     
     class Config:
         orm_mode = True
@@ -50,6 +68,7 @@ class LessonCreate(LessonBase):
 class LessonResponse(LessonBase):
     id: int
     questions: List[QuestionResponse] = []
+    exercises: List[ExerciseResponse] = []
     
     class Config:
         orm_mode = True

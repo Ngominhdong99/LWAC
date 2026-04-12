@@ -36,20 +36,36 @@ class Lesson(Base):
     media_url = Column(String, nullable=True)
 
     questions = relationship("Question", back_populates="lesson", cascade="all, delete-orphan")
+    exercises = relationship("Exercise", back_populates="lesson", cascade="all, delete-orphan", order_by="Exercise.order")
     results = relationship("Result", back_populates="lesson", cascade="all, delete-orphan")
     vocab_sources = relationship("VocabVault", back_populates="source_lesson")
+
+class Exercise(Base):
+    __tablename__ = "exercises"
+
+    id = Column(Integer, primary_key=True, index=True)
+    lesson_id = Column(Integer, ForeignKey("lessons.id"))
+    order = Column(Integer, default=0)
+    title = Column(String, nullable=True)
+    context = Column(Text, nullable=True)
+    image_url = Column(String, nullable=True)
+
+    lesson = relationship("Lesson", back_populates="exercises")
+    questions = relationship("Question", back_populates="exercise", cascade="all, delete-orphan")
 
 class Question(Base):
     __tablename__ = "questions"
 
     id = Column(Integer, primary_key=True, index=True)
     lesson_id = Column(Integer, ForeignKey("lessons.id"))
+    exercise_id = Column(Integer, ForeignKey("exercises.id"), nullable=True)
     type = Column(String)
     question_text = Column(Text)
     options = Column(JSON, nullable=True)
     correct_answer = Column(String)
 
     lesson = relationship("Lesson", back_populates="questions")
+    exercise = relationship("Exercise", back_populates="questions")
 
 class VocabVault(Base):
     __tablename__ = "vocab_vault"
