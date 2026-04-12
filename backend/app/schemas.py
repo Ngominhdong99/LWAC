@@ -43,6 +43,7 @@ class ExerciseBase(BaseModel):
     title: Optional[str] = None
     context: Optional[str] = None
     image_url: Optional[str] = None
+    audio_url: Optional[str] = None
 
 class ExerciseCreate(ExerciseBase):
     questions: List[QuestionBase] = []

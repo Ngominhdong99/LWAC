@@ -546,3 +546,98 @@ Return ONLY the JSON array. Do not wrap it in markdown code blocks like ```json.
             continue
 
     return {"questions": [], "error": f"AI generation failed: {str(last_error)[:200]}"}
+
+# ── AI Parse Exercises (Bulk) ──────────────────────────────────────
+class AIParseExercisesRequest(BaseModel):
+    raw_text: str
+    lesson_type: str = "reading"  # "reading" or "listening"
+
+@router.post("/ai-parse-exercises")
+def ai_parse_exercises(req: AIParseExercisesRequest):
+    """Use Gemini to parse raw text into multiple exercises, each with its own questions."""
+    import os
+    import json
+    try:
+        from google import genai
+        from google.genai import types
+    except ImportError:
+        return {"exercises": [], "error": "AI service not available"}
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return {"exercises": [], "error": "Gemini API key not configured."}
+
+    prompt = f"""You are an expert IELTS exam parser. Your task is to parse raw test content into MULTIPLE exercises (sections/parts). Each exercise contains its own passage/context and set of questions.
+
+Raw text:
+\"\"\"
+{req.raw_text}
+\"\"\"
+
+Guidelines:
+1. Split the content into logical sections/exercises. In IELTS tests, each "section" or "part" or "passage" should be a separate exercise.
+2. For each exercise, extract:
+   - `title`: A descriptive title (e.g. "Section 1", "Part 1", "Passage 1", or the actual section title if given)
+   - `context`: The reading passage or listening context text for that exercise. If no passage is found for a section, set to empty string.
+   - `questions`: An array of question objects
+3. For each question object:
+   - `type`: "multiple_choice" if it has options (A/B/C/D), or "fill_blank" if typed answer
+   - `question_text`: The question text
+   - `options`: Dictionary with keys "A", "B", "C", "D" etc. Empty dict for fill_blank
+   - `correct_answer`: The option key for MC, or the text answer for fill_blank. If multiple blanks in one question, separate by ` ; ` (space-semicolon-space). If multiple accepted answers for one blank, separate by `|`.
+
+4. The output must be a JSON array of exercise objects:
+[
+  {{
+    "title": "Section 1",
+    "context": "passage text here...",
+    "questions": [
+      {{
+        "type": "multiple_choice",
+        "question_text": "What is...?",
+        "options": {{"A": "...", "B": "...", "C": "...", "D": "..."}},
+        "correct_answer": "B"
+      }}
+    ]
+  }},
+  ...
+]
+
+5. If you cannot clearly separate into multiple exercises, put EVERYTHING in a single exercise.
+6. Return ONLY the JSON array. Do not wrap it in markdown code blocks.
+"""
+
+    models_to_try = [
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash-lite",
+        "gemini-2.0-flash",
+    ]
+
+    client = genai.Client(api_key=api_key)
+    last_error = None
+
+    for model_name in models_to_try:
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=[{"role": "user", "parts": [{"text": prompt}]}],
+                config=types.GenerateContentConfig(
+                    temperature=0.1,
+                    response_mime_type="application/json",
+                ),
+            )
+            
+            try:
+                exercises = json.loads(response.text)
+                if not isinstance(exercises, list):
+                    exercises = [exercises]
+                return {"exercises": exercises}
+            except json.JSONDecodeError:
+                return {"exercises": [], "error": "Failed to parse JSON from AI response."}
+                
+        except Exception as e:
+            last_error = e
+            print(f"[AI Parse Exercises] {model_name} failed: {e}")
+            continue
+
+    return {"exercises": [], "error": f"AI generation failed: {str(last_error)[:200]}"}

@@ -49,6 +49,7 @@ class Exercise(Base):
     title = Column(String, nullable=True)
     context = Column(Text, nullable=True)
     image_url = Column(String, nullable=True)
+    audio_url = Column(String, nullable=True)
 
     lesson = relationship("Lesson", back_populates="exercises")
     questions = relationship("Question", back_populates="exercise", cascade="all, delete-orphan")

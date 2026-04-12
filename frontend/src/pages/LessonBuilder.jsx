@@ -118,7 +118,30 @@ const LessonBuilder = () => {
           if (data.content?.video_url && data.content.video_url.startsWith('http')) setVideoUrlInput(data.content.video_url);
           setExistingAudioUrl(data.media_url || '');
           if (data.media_url && data.media_url.startsWith('http')) setAudioUrlInput(data.media_url);
-          if (data.questions) setQuestions(data.questions);
+
+          if (data.exercises && data.exercises.length > 0) {
+            setExercises(data.exercises.map(ex => ({
+              ...ex,
+              _id: Date.now() + Math.random(),
+              questions: ex.questions || []
+            })));
+          } else if (data.questions && data.questions.length > 0) {
+            // Backward compatibility: migrate to single exercise
+            setExercises([{
+              _id: Date.now(),
+              order: 0,
+              title: 'Exercise 1',
+              audio_url: data.media_url || '',
+              image_url: data.content?.image_url || '',
+              questions: data.questions.map(q => ({
+                id: q.id,
+                type: q.type,
+                question_text: q.question_text,
+                options: q.options || { A: '', B: '', C: '', D: '' },
+                correct_answer: q.correct_answer
+              }))
+            }]);
+          }
         } else if (data.type === 'writing') {
           setPassageText(data.content?.prompt || '');
           setTask1Min(data.content?.task_1_min_words || 150);
@@ -149,6 +172,45 @@ const LessonBuilder = () => {
     ]);
   };
 
+  const handleParseExercises = async () => {
+    if (!aiParseText.trim()) {
+      toast.warning('Please enter some text containing sections and questions.');
+      return;
+    }
+    setIsParsingQuestions(true);
+    try {
+      const res = await axios.post(`${API_URL}/coach/ai-parse-exercises`, {
+        raw_text: aiParseText,
+        lesson_type: lessonType
+      });
+      if (res.data.exercises && res.data.exercises.length > 0) {
+        const parsedExercises = res.data.exercises.map((ex, i) => ({
+          _id: Date.now() + i,
+          order: exercises.length + i,
+          title: ex.title || `Exercise ${exercises.length + i + 1}`,
+          context: ex.context || '',
+          image_url: '',
+          audio_url: '',
+          questions: (ex.questions || []).map((q, j) => ({
+            ...q,
+            id: Date.now() + i + '_' + j
+          }))
+        }));
+        setExercises(prev => [...prev, ...parsedExercises]);
+        toast.success(`Generated ${parsedExercises.length} exercises!`);
+        setShowAiParsePanel(false);
+        setAiParseText('');
+      } else {
+        toast.error(res.data.error || 'Failed to extract exercises. Check your text format.');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('AI parsing failed. Please try again.');
+    } finally {
+      setIsParsingQuestions(false);
+    }
+  };
+
   const handleParseQuestions = async () => {
     if (!aiParseText.trim()) {
       toast.warning('Please enter some text containing questions and answers.');
@@ -164,7 +226,17 @@ const LessonBuilder = () => {
           ...q,
           id: Date.now() + i
         }));
-        setQuestions(prev => [...prev, ...newQuestions]);
+        
+        // If an active exercise is set, append questions to that specific exercise
+        if (activeExerciseIdx !== null) {
+          const newExercises = [...exercises];
+          newExercises[activeExerciseIdx].questions = [...(newExercises[activeExerciseIdx].questions || []), ...newQuestions];
+          setExercises(newExercises);
+        } else {
+          // Fallback legacy behavior string
+          setQuestions(prev => [...prev, ...newQuestions]);
+        }
+
         toast.success(`Successfully extracted ${newQuestions.length} questions!`);
         setShowAiParsePanel(false);
         setAiParseText('');
@@ -288,13 +360,14 @@ const LessonBuilder = () => {
          };
       }
 
-      // Build exercises payload for reading
-      const exercisesPayload = lessonType === 'reading' && exercises.length > 0
+      // Build exercises payload for reading/listening
+      const exercisesPayload = (lessonType === 'reading' || lessonType === 'listening') && exercises.length > 0
         ? exercises.map((ex, idx) => ({
             order: idx,
             title: ex.title || `Exercise ${idx + 1}`,
             context: ex.context || '',
             image_url: ex.image_url || null,
+            audio_url: ex.audio_url || null,
             questions: (ex.questions || []).map(q => ({
               type: q.type,
               question_text: q.question_text,
@@ -317,7 +390,8 @@ const LessonBuilder = () => {
         // Edit Mode
         await axios.put(`${API_URL}/lessons/${id}`, lessonPayload);
         
-        if (lessonType === 'listening') {
+        // Remove old questions if we saved exercises
+        if (!exercisesPayload && lessonType === 'listening') {
           const questionsPayload = questions.map(q => ({
              type: q.type,
              question_text: q.question_text,
@@ -769,25 +843,71 @@ const LessonBuilder = () => {
           </div>
         )}
 
-        {/* ═══════ READING: Exercise Builder ═══════ */}
-        {lessonType === 'reading' && (
+        {/* ═══════ READING & LISTENING: Exercise Builder ═══════ */}
+        {(lessonType === 'reading' || lessonType === 'listening') && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-slate-800 text-lg">Exercises ({exercises.length})</h3>
-              <button 
-                onClick={() => setExercises([...exercises, {
-                  _id: Date.now(),
-                  order: exercises.length,
-                  title: `Exercise ${exercises.length + 1}`,
-                  context: '',
-                  image_url: '',
-                  questions: []
-                }])}
-                className="flex items-center space-x-1 text-sm bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors font-semibold shadow-sm"
-              >
-                <Plus size={16} /> <span>Add Exercise</span>
-              </button>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => { setActiveExerciseIdx(null); setShowAiParsePanel(!showAiParsePanel); }}
+                  className={`flex items-center space-x-1 text-sm px-3 py-1.5 rounded-lg transition-colors font-medium border ${showAiParsePanel ? 'bg-violet-100 text-violet-700 border-violet-200' : 'bg-white text-violet-600 hover:bg-violet-50 border-violet-100 shadow-sm'}`}
+                >
+                  <Sparkles size={16} /> <span className="hidden sm:inline">AI Generate All</span>
+                </button>
+                <button 
+                  onClick={() => setExercises([...exercises, {
+                    _id: Date.now(),
+                    order: exercises.length,
+                    title: `Exercise ${exercises.length + 1}`,
+                    context: '',
+                    image_url: '',
+                    audio_url: '',
+                    questions: []
+                  }])}
+                  className="flex items-center space-x-1 text-sm bg-primary-600 hover:bg-primary-700 text-white px-3 py-1.5 rounded-lg transition-colors font-semibold shadow-sm"
+                >
+                  <Plus size={16} /> <span className="hidden sm:inline">Add Exercise</span>
+                </button>
+              </div>
             </div>
+
+            {/* Context AI Parse All Panel */}
+            {showAiParsePanel && activeExerciseIdx === null && (
+              <div className="bg-violet-50 border border-violet-200 rounded-xl p-5 shadow-inner mb-6">
+                <div className="flex justify-between items-center mb-3">
+                  <div className="flex items-center space-x-2 text-violet-800">
+                    <Sparkles size={20} />
+                    <h4 className="font-bold text-base">Bulk Generate Exercises</h4>
+                  </div>
+                  <button onClick={() => setShowAiParsePanel(false)} className="text-violet-400 hover:text-violet-600 bg-white rounded-full p-1 shadow-sm">
+                    <X size={16} />
+                  </button>
+                </div>
+                <p className="text-sm text-violet-700 mb-3 font-medium">Paste the entire test content here. Gemini will automatically separate it into multiple logical exercises and their questions.</p>
+                <textarea
+                  value={aiParseText}
+                  onChange={e => setAiParseText(e.target.value)}
+                  className="w-full px-4 py-3 border border-violet-300 rounded-xl text-sm mb-4 focus:ring-2 focus:ring-violet-500 focus:border-transparent min-h-[160px] shadow-sm bg-white"
+                  placeholder="Paste your full test content (reading passages or listening transcripts) and all questions here..."
+                />
+                <button
+                  onClick={handleParseExercises}
+                  disabled={isParsingQuestions || !aiParseText.trim()}
+                  className={`w-full flex items-center justify-center py-3 rounded-xl text-sm font-bold transition-all shadow-md ${
+                    isParsingQuestions || !aiParseText.trim()
+                      ? 'bg-violet-200 text-violet-400 cursor-not-allowed shadow-none'
+                      : 'bg-violet-600 text-white hover:bg-violet-700 hover:shadow-lg'
+                  }`}
+                >
+                  {isParsingQuestions ? (
+                    <><span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></span> Extracting All Content...</>
+                  ) : (
+                    <><Sparkles size={18} className="mr-2" /> Extract as Multiple Exercises</>
+                  )}
+                </button>
+              </div>
+            )}
 
             {exercises.length === 0 && (
               <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-xl">
@@ -822,24 +942,50 @@ const LessonBuilder = () => {
                 </div>
 
                 <div className="p-5 space-y-4">
-                  {/* Exercise Image */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase flex items-center space-x-1">
-                      <Image size={14} /> <span>Image (optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={ex.image_url}
-                      onChange={e => {
-                        const newExercises = [...exercises];
-                        newExercises[exIdx] = { ...ex, image_url: e.target.value };
-                        setExercises(newExercises);
-                      }}
-                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Paste image URL for this exercise..."
-                    />
-                    {ex.image_url && (
-                      <img src={ex.image_url.startsWith('http') ? ex.image_url : `${API_URL}${ex.image_url}`} alt="exercise" className="mt-2 max-h-32 rounded-lg border" />
+                  {/* Exercise Image and Audio */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase flex items-center space-x-1">
+                        <Image size={14} /> <span>Image (optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={ex.image_url || ''}
+                        onChange={e => {
+                          const newExercises = [...exercises];
+                          newExercises[exIdx] = { ...ex, image_url: e.target.value };
+                          setExercises(newExercises);
+                        }}
+                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Paste image URL for this exercise..."
+                      />
+                      {ex.image_url && (
+                        <img src={ex.image_url.startsWith('http') ? ex.image_url : `${API_URL}${ex.image_url}`} alt="exercise" className="mt-2 max-h-32 rounded-lg border bg-slate-50" />
+                      )}
+                    </div>
+
+                    {lessonType === 'listening' && (
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase flex items-center space-x-1">
+                          <Volume2 size={14} /> <span>Audio URL (optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={ex.audio_url || ''}
+                          onChange={e => {
+                            const newExercises = [...exercises];
+                            newExercises[exIdx] = { ...ex, audio_url: e.target.value };
+                            setExercises(newExercises);
+                          }}
+                          className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                          placeholder="Paste audio URL specific to this exercise..."
+                        />
+                        {ex.audio_url && (
+                           <div className="mt-2 p-2 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-600 truncate">
+                             Attached: {ex.audio_url}
+                           </div>
+                        )}
+                      </div>
                     )}
                   </div>
 
@@ -1077,8 +1223,8 @@ const LessonBuilder = () => {
           </div>
         )}
 
-        {/* ═══════ LISTENING: Flat Questions Builder ═══════ */}
-        {lessonType === 'listening' && (
+        {/* ═══════ LISTENING: Flat Questions Builder (LEGACY, HIDDEN) ═══════ */}
+        {false && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-slate-800">Questions ({questions.length})</h3>

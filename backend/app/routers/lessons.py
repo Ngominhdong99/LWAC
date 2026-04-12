@@ -71,7 +71,8 @@ def create_exercises_bulk(
             order=ex_data.order,
             title=ex_data.title,
             context=ex_data.context,
-            image_url=ex_data.image_url
+            image_url=ex_data.image_url,
+            audio_url=ex_data.audio_url
         )
         db.add(db_exercise)
         db.flush()
@@ -103,6 +104,7 @@ class ExercisePayload(BaseModel):
     title: Optional[str] = None
     context: Optional[str] = None
     image_url: Optional[str] = None
+    audio_url: Optional[str] = None
     questions: List[schemas.QuestionBase] = []
 
 class LessonUpdate(BaseModel):
@@ -146,7 +148,8 @@ def update_lesson(lesson_id: int, lesson_update: LessonUpdate, db: Session = Dep
                 order=ex_data.order,
                 title=ex_data.title,
                 context=ex_data.context,
-                image_url=ex_data.image_url
+                image_url=ex_data.image_url,
+                audio_url=ex_data.audio_url
             )
             db.add(db_exercise)
             db.flush()

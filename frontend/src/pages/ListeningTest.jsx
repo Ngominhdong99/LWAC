@@ -54,8 +54,8 @@ const ListeningTest = () => {
   const [fillAnswers, setFillAnswers] = useState({});
   const [result, setResult] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [playCount, setPlayCount] = useState(0);
+  const [playingAudio, setPlayingAudio] = useState(null); // 'global' or exerciseId
+  const [playCounts, setPlayCounts] = useState({}); // { 'global': count, id: count }
   const [showTranscript, setShowTranscript] = useState(false);
   const audioRef = useRef(null);
   const [audioSrc, setAudioSrc] = useState(null);
@@ -70,7 +70,7 @@ const ListeningTest = () => {
     setFillAnswers({});
     setResult(null);
     setLoading(true);
-    setPlayCount(0);
+    setPlayCounts({});
     setShowTranscript(false);
 
     const fetchData = async () => {
@@ -114,10 +114,18 @@ const ListeningTest = () => {
             }
           } catch (e) { console.error('Failed to load result for view mode', e); }
         } else if (!isViewMode && user) {
-          // Restore play count from localStorage
+          // Restore play counts from localStorage
           try {
             const savedPlays = localStorage.getItem(playCountKey);
-            if (savedPlays) setPlayCount(parseInt(savedPlays) || 0);
+            if (savedPlays) {
+               try {
+                  const dict = JSON.parse(savedPlays);
+                  if (typeof dict === 'object') setPlayCounts(dict);
+                  else setPlayCounts({ 'global': parseInt(savedPlays) || 0 }); // Legacy string parsing
+               } catch(ex) {
+                  setPlayCounts({ 'global': parseInt(savedPlays) || 0 });
+               }
+            }
           } catch (e) { /* ignore */ }
 
           // Check if already submitted (prevents re-submit on F5)
@@ -204,12 +212,12 @@ const ListeningTest = () => {
     }
   }, [answers, fillAnswers]);
 
-  // Persist play count to localStorage
+  // Persist play counts to localStorage
   useEffect(() => {
-    if (playCount > 0) {
-      localStorage.setItem(playCountKey, String(playCount));
+    if (Object.keys(playCounts).length > 0) {
+      localStorage.setItem(playCountKey, JSON.stringify(playCounts));
     }
-  }, [playCount]);
+  }, [playCounts]);
 
   // Save on beforeunload
   useEffect(() => {
@@ -231,52 +239,52 @@ const ListeningTest = () => {
     return null;
   };
 
-  const playAudio = () => {
-    if (isPlaying) {
-      if (audioRef.current) {
-        audioRef.current.pause();
-      } else {
-        cancelSpeech();
-      }
-      setIsPlaying(false);
+  const playAudio = (audioId, url, transcript) => {
+    if (playingAudio === audioId) {
+      if (audioRef.current) audioRef.current.pause();
+      else cancelSpeech();
+      setPlayingAudio(null);
       return;
     }
 
+    // Stop currently playing audio first
+    if (playingAudio) {
+      if (audioRef.current) audioRef.current.pause();
+      else cancelSpeech();
+    }
+
+    const currentCount = playCounts[audioId] || 0;
     // Max 2 plays like real IELTS
-    if (playCount >= 2 && !result) {
-      toast.warning('You have already played the audio 2 times (same as real IELTS).');
+    if (currentCount >= 2 && !result) {
+      toast.warning('You have already played this audio 2 times (same as real IELTS).');
       return;
     }
 
-    if (lesson?.media_url) {
-      // Use DOM audio element for mobile compatibility
-      let audioUrl = lesson.media_url;
-      if (audioUrl.startsWith('/static')) {
-        audioUrl = `${API_URL}${audioUrl}`;
-      }
+    if (url) {
+      let audioUrl = url;
+      if (audioUrl.startsWith('/static')) audioUrl = `${API_URL}${audioUrl}`;
       setAudioSrc(audioUrl);
-      // Wait a tick for src to update, then play
       setTimeout(() => {
         if (audioRef.current) {
-          audioRef.current.play().then(() => setIsPlaying(true)).catch(e => {
+          audioRef.current.play().then(() => setPlayingAudio(audioId)).catch(e => {
             console.error("Playback Error:", e);
-            setIsPlaying(false);
+            setPlayingAudio(null);
             toast.warning('Could not play audio. Please tap the play button again.');
           });
         }
       }, 100);
-    } else if (lesson?.content?.transcript) {
-      speakNatural(lesson.content.transcript, {
+    } else if (transcript) {
+      speakNatural(transcript, {
         rate: 0.9,
-        onstart: () => setIsPlaying(true),
+        onstart: () => setPlayingAudio(audioId),
         onend: () => {
-          setIsPlaying(false);
-          setPlayCount(prev => prev + 1);
+          setPlayingAudio(null);
+          setPlayCounts(prev => ({ ...prev, [audioId]: (prev[audioId] || 0) + 1 }));
         },
-        onerror: () => setIsPlaying(false),
+        onerror: () => setPlayingAudio(null),
       });
     } else {
-      toast.info('No audio available for this lesson.');
+      toast.info('No audio available for this exercise.');
     }
   };
 
@@ -338,8 +346,21 @@ const ListeningTest = () => {
   const nextLesson = getNextLesson();
   const answeredCount = Object.keys(answers).length + Object.keys(fillAnswers).length;
   const progressPercent = lesson.questions.length > 0 ? Math.round((answeredCount / lesson.questions.length) * 100) : 0;
-  const hasAudio = !!(lesson.media_url || lesson.content?.transcript);
+  const hasAudio = !!(lesson.media_url || lesson.content?.transcript || (lesson.exercises && lesson.exercises.some(ex => ex.audio_url)));
 
+  const displayExercises = lesson?.exercises && lesson.exercises.length > 0 
+    ? lesson.exercises 
+    : [{
+        id: 'global-fallback',
+        title: '',
+        context: lesson?.content?.passage || '',
+        image_url: lesson?.content?.image_url || '',
+        audio_url: lesson?.media_url || '',
+        video_url: lesson?.content?.video_url || '',
+        transcript: lesson?.content?.transcript || '',
+        isFallback: true,
+        questions: lesson?.questions || []
+      }];
   return (
     <div className="h-full flex flex-col bg-secondary">
       {/* Hidden audio element for mobile compatibility */}
@@ -347,8 +368,13 @@ const ListeningTest = () => {
         ref={audioRef}
         src={audioSrc}
         preload="auto"
-        onEnded={() => { setIsPlaying(false); setPlayCount(prev => prev + 1); }}
-        onError={() => { setIsPlaying(false); console.error('Audio element error'); }}
+        onEnded={() => { 
+          if(playingAudio) {
+            setPlayCounts(prev => ({ ...prev, [playingAudio]: (prev[playingAudio] || 0) + 1 }));
+          }
+          setPlayingAudio(null); 
+        }}
+        onError={() => { setPlayingAudio(null); console.error('Audio element error'); }}
         style={{ display: 'none' }}
       />
       {/* Header */}
@@ -363,7 +389,7 @@ const ListeningTest = () => {
           </div>
           <div className="flex items-center space-x-2 text-amber-600 bg-amber-50 px-3 py-1.5 rounded-full text-sm font-semibold">
             <Headphones size={16} />
-            <span>{playCount}/2</span>
+            <span>Limited Plays</span>
           </div>
         </div>
         <div className="w-full h-1 bg-slate-100">
@@ -375,56 +401,93 @@ const ListeningTest = () => {
         {/* Left: Audio Player & Transcript */}
         <section className="md:w-1/2 overflow-y-auto p-4 md:p-8 bg-white md:border-r border-slate-200 shadow-sm relative z-0">
           <div className="max-w-prose mx-auto">
-            {/* Passage / Context */}
-            {lesson.content?.passage && (
-              <div className="mb-6 bg-white border border-slate-200 rounded-2xl p-5 md:p-6 shadow-sm">
-                <h4 className="font-bold text-slate-800 mb-3">Context / Background</h4>
-                <div className="text-slate-700 text-sm md:text-base leading-relaxed">
-                  <MarkdownRenderer>{lesson.content.passage}</MarkdownRenderer>
-                </div>
-              </div>
-            )}
-
-            {/* Audio Player Card */}
-            {hasAudio && (
-              <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 md:p-8 border border-amber-200 mb-6">
-                <div className="flex flex-col items-center space-y-4">
-                  <div className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transition-all ${isPlaying ? 'bg-amber-500 scale-110 animate-pulse' : 'bg-amber-400'}`}>
-                    <Headphones size={36} className="text-white" />
-                  </div>
-                  <h3 className="text-lg font-bold text-slate-800 text-center">{lesson.title}</h3>
-                  <p className="text-sm text-slate-500 text-center">Listen carefully and answer the questions. You can play the audio up to 2 times.</p>
-
-                  <button
-                    onClick={playAudio}
-                    disabled={playCount >= 2 && !isPlaying && !result}
-                    className={`flex items-center space-x-3 px-8 py-3 rounded-xl font-semibold text-lg transition-all shadow-md ${
-                      isPlaying
-                        ? 'bg-red-500 hover:bg-red-600 text-white'
-                        : playCount >= 2 && !result
-                          ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                          : 'bg-amber-500 hover:bg-amber-600 text-white hover:scale-105'
-                    }`}
-                  >
-                    {isPlaying ? <Pause size={22} /> : <Play size={22} />}
-                    <span>{isPlaying ? 'Pause' : playCount === 0 ? 'Play Audio' : `Play Again (${2 - playCount} left)`}</span>
-                  </button>
-
-                  {/* Volume indicator when playing */}
-                  {isPlaying && (
-                    <div className="flex items-center space-x-1">
-                      {[1,2,3,4,5].map(i => (
-                        <div key={i} className="w-1 bg-amber-400 rounded-full animate-pulse" style={{ height: `${8 + Math.random() * 16}px`, animationDelay: `${i * 0.1}s` }}></div>
-                      ))}
+            {/* Exercise-based Left Side */}
+            <div className="space-y-8">
+              {displayExercises.map((ex, exIdx) => (
+                <div key={ex.id} className="space-y-4">
+                  {displayExercises.length > 1 && !ex.isFallback && (
+                    <div className="flex items-center space-x-2 sticky top-0 bg-white/90 backdrop-blur-sm py-2 z-10">
+                      <span className="w-7 h-7 rounded-lg bg-amber-500 text-white flex items-center justify-center text-xs font-bold shadow-sm">{exIdx + 1}</span>
+                      <h3 className="text-lg font-bold text-amber-800">{ex.title || `Exercise ${exIdx + 1}`}</h3>
                     </div>
                   )}
-                </div>
-              </div>
-            )}
 
-            {/* Video Player (if provided) */}
+                  {ex.context && (
+                    <div className="mb-4 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                      <h4 className="font-bold text-slate-800 mb-3">Context / Background</h4>
+                      <div className="text-slate-700 text-sm md:text-base leading-relaxed">
+                        <MarkdownRenderer>{ex.context}</MarkdownRenderer>
+                      </div>
+                    </div>
+                  )}
+
+                  {ex.audio_url && (
+                    <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 border border-amber-200 mb-6">
+                      <div className="flex flex-col items-center space-y-4">
+                        <div className={`w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all ${playingAudio === ex.id ? 'bg-amber-500 scale-110 animate-pulse' : 'bg-amber-400'}`}>
+                          <Headphones size={28} className="text-white" />
+                        </div>
+                        
+                        <button
+                          onClick={() => playAudio(ex.id, ex.audio_url, null)}
+                          disabled={(playCounts[ex.id] || 0) >= 2 && playingAudio !== ex.id && !result}
+                          className={`flex items-center space-x-3 px-6 py-2.5 rounded-xl font-semibold text-base transition-all shadow-md ${
+                            playingAudio === ex.id
+                              ? 'bg-red-500 hover:bg-red-600 text-white'
+                              : (playCounts[ex.id] || 0) >= 2 && !result
+                                ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                : 'bg-amber-500 hover:bg-amber-600 text-white hover:scale-105'
+                          }`}
+                        >
+                          {playingAudio === ex.id ? <Pause size={20} /> : <Play size={20} />}
+                          <span>{playingAudio === ex.id ? 'Pause' : (playCounts[ex.id] || 0) === 0 ? 'Play Audio' : `Play Again (${2 - (playCounts[ex.id] || 0)} left)`}</span>
+                        </button>
+
+                        {/* Volume indicator when playing */}
+                        {playingAudio === ex.id && (
+                          <div className="flex items-center space-x-1">
+                            {[1,2,3,4,5].map(i => (
+                              <div key={i} className="w-1 bg-amber-400 rounded-full animate-pulse" style={{ height: `${8 + Math.random() * 16}px`, animationDelay: `${i * 0.1}s` }}></div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {ex.image_url && (
+                    <div className="mb-4">
+                      <img 
+                        src={ex.image_url.startsWith('http') ? ex.image_url : `${API_URL}${ex.image_url}`} 
+                        alt="Exercise"
+                        className="w-full rounded-xl shadow-md border border-slate-200"
+                      />
+                    </div>
+                  )}
+
+                  {/* Transcript for this exercise (shown after submit) */}
+                  {showTranscript && ex.transcript && (
+                    <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 mt-4">
+                      <h4 className="font-bold text-slate-700 mb-3 flex items-center space-x-2">
+                        <Volume2 size={16} />
+                        <span>Transcript</span>
+                      </h4>
+                      <div className="text-slate-600 text-sm italic">
+                        <MarkdownRenderer>{ex.transcript}</MarkdownRenderer>
+                      </div>
+                    </div>
+                  )}
+
+                  {exIdx < displayExercises.length - 1 && (
+                    <hr className="border-slate-200 my-6" />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Video Player (if provided globally) */}
             {lesson.content?.video_url && (
-              <div className="bg-slate-900 rounded-2xl overflow-hidden mb-6 border border-slate-700">
+              <div className="bg-slate-900 rounded-2xl overflow-hidden mb-6 border border-slate-700 mt-6">
                 {(() => {
                   const url = lesson.content.video_url;
                   const finalUrl = url.startsWith('http') ? url : `${API_URL}${url}`;
@@ -450,30 +513,6 @@ const ListeningTest = () => {
               </div>
             )}
 
-            {/* Image (if provided) */}
-            {lesson.content?.image_url && (
-              <div className="mb-6">
-                <img 
-                  src={lesson.content.image_url.startsWith('http') ? lesson.content.image_url : `${API_URL}${lesson.content.image_url}`} 
-                  alt={lesson.title} 
-                  className="w-full rounded-xl shadow-md border border-slate-200"
-                />
-              </div>
-            )}
-
-            {/* Transcript (shown after submit) */}
-            {showTranscript && lesson.content.transcript && (
-              <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200">
-                <h4 className="font-bold text-slate-700 mb-3 flex items-center space-x-2">
-                  <Volume2 size={16} />
-                  <span>Transcript</span>
-                </h4>
-                <div className="text-slate-600 text-sm italic">
-                  <MarkdownRenderer>{lesson.content.transcript}</MarkdownRenderer>
-                </div>
-              </div>
-            )}
-
             {!showTranscript && (
               <div className="text-center py-8 text-slate-400 text-sm">
                 <p>The transcript will be revealed after you submit your answers.</p>
@@ -487,11 +526,23 @@ const ListeningTest = () => {
           <div className="max-w-xl mx-auto space-y-6 pb-24">
             <h3 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2">Questions 1-{lesson.questions.length}</h3>
 
-            {lesson.questions.map((q, idx) => {
-              const hasInlineBlanks = (q.type === 'fill_blank' || q.type === 'written_answer') && /(_{2,}|\.{3,})/.test(q.question_text || '');
-              
-              const renderInlineText = () => {
-                if (!hasInlineBlanks) return q.question_text;
+            {displayExercises.map((ex, exIdx) => {
+              const prevQuestionCount = displayExercises.slice(0, exIdx).reduce((sum, e) => sum + (e.questions?.length || 0), 0);
+              return (
+                <div key={ex.id}>
+                  {displayExercises.length > 1 && !ex.isFallback && (
+                    <div className="flex items-center space-x-2 mt-4 mb-3">
+                      <span className="w-6 h-6 rounded-md bg-amber-600 text-white flex items-center justify-center text-[10px] font-bold">{exIdx + 1}</span>
+                      <h4 className="text-sm font-bold text-amber-700 uppercase tracking-wide">{ex.title || `Exercise ${exIdx + 1}`}</h4>
+                    </div>
+                  )}
+                  {(ex.questions || []).map((q, qIdx) => {
+                    const globalIdx = prevQuestionCount + qIdx;
+                    const idx = globalIdx; // for backwards compatibility in the variable below
+                    const hasInlineBlanks = (q.type === 'fill_blank' || q.type === 'written_answer') && /(_{2,}|\.{3,})/.test(q.question_text || '');
+                    
+                    const renderInlineText = () => {
+                      if (!hasInlineBlanks) return q.question_text;
                 
                 const parts = (q.question_text || '').split(/(_{2,}|\.{3,})/g);
                 let blankIndex = 0;
@@ -665,8 +716,10 @@ const ListeningTest = () => {
               </div>
               );
             })}
+                </div>
+              );
+            })}
           </div>
-
           {/* Bottom Action Bar */}
           {result ? (
             <div className="fixed md:absolute bottom-16 md:bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-slate-200 z-10">
