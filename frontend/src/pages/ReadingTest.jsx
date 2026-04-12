@@ -511,197 +511,221 @@ const ReadingTest = () => {
             {/* Exercise-grouped questions */}
             {lesson.exercises && lesson.exercises.length > 0 ? (
               lesson.exercises.map((ex, exIdx) => {
-                // Get the starting question number for this exercise
                 const prevQuestionCount = lesson.exercises.slice(0, exIdx).reduce((sum, e) => sum + (e.questions?.length || 0), 0);
                 return (
                   <div key={ex.id}>
                     {lesson.exercises.length > 1 && (
-                      <div className="flex items-center space-x-2 mt-4 mb-3">
-                        <span className="w-6 h-6 rounded-md bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold">{exIdx + 1}</span>
-                        <h4 className="text-sm font-bold text-blue-700 uppercase tracking-wide">{ex.title || `Exercise ${exIdx + 1}`}</h4>
+                      <div className="flex items-center gap-3 mt-6 mb-4">
+                        <span className="w-7 h-7 rounded-lg bg-primary-600 text-white flex items-center justify-center text-xs font-bold shadow-sm">{exIdx + 1}</span>
+                        <h4 className="text-sm font-bold text-primary-700 uppercase tracking-wider">{ex.title || `Exercise ${exIdx + 1}`}</h4>
+                        <div className="flex-1 h-px bg-slate-200"></div>
                       </div>
                     )}
                     {(ex.questions || []).map((q, qIdx) => {
                       const globalIdx = prevQuestionCount + qIdx;
                       const hasInlineBlanks = (q.type === 'fill_blank' || q.type === 'written_answer') && /(_{2,}|\.{3,})/.test(q.question_text || '');
 
-              
-              const renderInlineText = () => {
-                if (!hasInlineBlanks) return q.question_text;
-                
-                const parts = (q.question_text || '').split(/(_{2,}|\.{3,})/g);
-                let blankIndex = 0;
-                const blankCount = getBlankCount(q.correct_answer);
-                const correctParts = (q.correct_answer || '').split(';').map(p => p.trim());
+                      const renderInlineText = () => {
+                        if (!hasInlineBlanks) return null;
+                        const parts = (q.question_text || '').split(/(_{2,}|\.{3,})/g);
+                        let blankIndex = 0;
+                        const blankCount = getBlankCount(q.correct_answer);
+                        const correctParts = (q.correct_answer || '').split(';').map(p => p.trim());
 
-                return parts.map((part, bIdx) => {
-                  if (/^_{2,}$|^\.{3,}$/.test(part)) {
-                    const currentBIdx = blankIndex++;
-                    const userVal = getBlankAnswerPart(fillAnswers[q.id], currentBIdx);
-                    const correctPart = correctParts[currentBIdx] || '';
-                    
-                    const isBlankCorrect = result !== null && checkSingleBlank(userVal, correctPart);
-                    const isBlankWrong = result !== null && !checkSingleBlank(userVal, correctPart);
-                    
-                    let inputCls = 'inline-block mx-1 px-2 py-1 border-b-2 bg-transparent focus:bg-slate-50 focus:outline-none transition-all w-28 md:w-36 text-center disabled:opacity-100';
-                    if (result !== null) {
-                      if (isBlankCorrect) inputCls += ' border-green-500 text-green-700 bg-green-50/50';
-                      else inputCls += ' border-red-500 text-red-700 bg-red-50/50 line-through decoration-red-400';
-                    } else {
-                      inputCls += ' border-slate-300 focus:border-primary-500 text-primary-700 font-semibold';
-                    }
+                        return parts.map((part, bIdx) => {
+                          if (/^_{2,}$|^\.{3,}$/.test(part)) {
+                            const currentBIdx = blankIndex++;
+                            const userVal = getBlankAnswerPart(fillAnswers[q.id], currentBIdx);
+                            const correctPart = correctParts[currentBIdx] || '';
+                            const isBlankCorrect = result !== null && checkSingleBlank(userVal, correctPart);
+                            const isBlankWrong = result !== null && !checkSingleBlank(userVal, correctPart);
 
-                    return (
-                      <span key={bIdx} className="relative inline-flex items-center">
-                        <input
-                          type="text"
-                          value={userVal}
-                          disabled={result !== null}
-                          onChange={(e) => {
-                            const newVal = setBlankAnswerPart(fillAnswers[q.id] || '', currentBIdx, e.target.value, blankCount);
-                            handleFillChange(q.id, newVal);
-                          }}
-                          className={inputCls}
-                        />
-                        {isBlankWrong && (
-                          <span className="text-red-600 font-bold text-xs ml-1 bg-red-50 px-1.5 py-0.5 rounded-md whitespace-nowrap">
-                            ✓ {correctPart.split('|').map(a => a.trim()).join(' / ')}
-                          </span>
-                        )}
-                      </span>
-                    );
-                  }
-                  return <span key={bIdx}>{part}</span>;
-                });
-              };
-
-              return (
-              <div key={q.id} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 transition-all hover:border-primary-200">
-                <p className="font-semibold text-slate-800 mb-4 flex leading-loose">
-                  <span className="bg-slate-100 text-slate-600 w-6 h-6 rounded-full flex items-center justify-center text-xs mr-3 flex-shrink-0 mt-1">{idx + 1}</span>
-                  <span className="flex-1">{renderInlineText()}</span>
-                </p>
-
-                {q.type === 'multiple_choice' && q.options && (
-                  <div className="space-y-2 pl-9">
-                    {Object.entries(q.options).map(([key, value]) => {
-                      const isSelected = answers[q.id] === key;
-                      const isCorrect = key === q.correct_answer;
-                      const showFeedback = result !== null;
-
-                      let cls = 'bg-slate-50 hover:bg-slate-100 border-transparent';
-                      if (showFeedback) {
-                        if (isCorrect) cls = 'bg-green-50 border-green-500';
-                        else if (isSelected && !isCorrect) cls = 'bg-red-50 border-red-500';
-                        else cls = 'bg-slate-50 opacity-60 border-transparent';
-                      } else if (isSelected) {
-                        cls = 'bg-primary-50 border-primary-500';
-                      }
+                            return (
+                              <span key={bIdx} className="relative inline-flex items-center">
+                                <input
+                                  type="text"
+                                  value={userVal}
+                                  disabled={result !== null || isViewMode}
+                                  onChange={(e) => {
+                                    const newVal = setBlankAnswerPart(fillAnswers[q.id] || '', currentBIdx, e.target.value, blankCount);
+                                    handleFillChange(q.id, newVal);
+                                  }}
+                                  placeholder={`${globalIdx + 1}.${currentBIdx + 1}`}
+                                  className={`inline-block mx-1 px-2 py-1 border-b-2 bg-transparent focus:bg-slate-50 focus:outline-none transition-all w-28 md:w-36 text-center disabled:opacity-100 ${
+                                    result !== null
+                                      ? isBlankCorrect ? 'border-green-500 text-green-700 bg-green-50/50' : 'border-red-500 text-red-700 bg-red-50/50 line-through decoration-red-400'
+                                      : 'border-slate-300 focus:border-primary-500 text-primary-700 font-semibold'
+                                  }`}
+                                />
+                                {isBlankWrong && (
+                                  <span className="text-green-600 font-bold text-xs ml-1 bg-green-50 px-1.5 py-0.5 rounded-md whitespace-nowrap">
+                                    ✓ {correctPart.split('|').map(a => a.trim()).join(' / ')}
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          }
+                          return <span key={bIdx}>{part}</span>;
+                        });
+                      };
 
                       return (
-                        <label key={key} className={`flex items-start space-x-3 p-3 rounded-xl cursor-pointer border-2 transition-all ${cls}`}>
-                          <input type="radio" name={`q-${q.id}`} value={key} disabled={showFeedback} checked={isSelected}
-                            onChange={() => handleAnswerSelect(q.id, key)}
-                            className="mt-0.5 text-primary-600 focus:ring-primary-500 cursor-pointer disabled:cursor-auto" />
-                          <span className="font-medium w-5 flex-shrink-0 text-slate-600">{key}.</span>
-                          <span className={showFeedback && isCorrect ? 'text-green-800 font-medium' : showFeedback && isSelected && !isCorrect ? 'text-red-800 line-through' : isSelected ? 'text-primary-800 font-medium' : 'text-slate-700'}>{value}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
+                        <div key={q.id} id={`question-${q.id}`} className="group scroll-mt-24 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-all">
+                          <div className="flex gap-4">
+                            <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold shrink-0 shadow-sm text-sm ${
+                              result !== null
+                                ? q.type === 'multiple_choice'
+                                  ? answers[q.id] === q.correct_answer ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                  : checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer) ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                : (answers[q.id] || fillAnswers[q.id]) ? 'bg-primary-100 text-primary-700' : 'bg-slate-100 text-slate-600'
+                            }`}>
+                              {globalIdx + 1}
+                            </span>
+                            <div className="flex-1 w-full overflow-hidden">
+                              {(q.type !== 'fill_blank' || !hasInlineBlanks) && (
+                                <div className="text-base text-slate-800 font-semibold mb-4 leading-relaxed">{q.question_text}</div>
+                              )}
 
-                {!hasInlineBlanks && (q.type === 'fill_blank' || q.type === 'written_answer') && (() => {
-                  const blankCount = getBlankCount(q.correct_answer);
-                  const isMultiBlank = blankCount > 1;
-                  const correctParts = (q.correct_answer || '').split(';').map(p => p.trim());
+                              {(() => {
+                                if (hasInlineBlanks) {
+                                  return (
+                                    <div className="text-base text-slate-800 font-medium leading-[2.5rem] p-4 bg-slate-50/50 rounded-xl border border-slate-100 text-justify">
+                                      {renderInlineText()}
+                                    </div>
+                                  );
+                                }
 
-                  return (
-                    <div className="pl-9 mt-2 space-y-2">
-                      {isMultiBlank ? (
-                        // Multi-blank: render N input fields
-                        correctParts.map((correctPart, bIdx) => {
-                          const userVal = getBlankAnswerPart(fillAnswers[q.id], bIdx);
-                          const isBlankCorrect = result !== null && checkSingleBlank(userVal, correctPart);
-                          const isBlankWrong = result !== null && !checkSingleBlank(userVal, correctPart);
-                          return (
-                            <div key={bIdx}>
-                              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">
-                                Blank {bIdx + 1}
-                              </label>
-                              <input
-                                type="text"
-                                placeholder={`Answer for blank ${bIdx + 1}...`}
-                                value={userVal}
-                                onChange={(e) => {
-                                  const newVal = setBlankAnswerPart(fillAnswers[q.id] || '', bIdx, e.target.value, blankCount);
-                                  handleFillChange(q.id, newVal);
-                                }}
-                                disabled={result !== null}
-                                className={`w-full px-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 ${
-                                  isBlankCorrect ? 'border-green-500 bg-green-50 text-green-800'
-                                    : isBlankWrong ? 'border-red-500 bg-red-50 text-red-800'
-                                    : 'border-slate-200 bg-white'
-                                }`}
-                              />
-                              {isBlankWrong && (
-                                <p className="text-sm text-green-600 mt-0.5 font-medium">
-                                  Correct: {correctPart.split('|').map(a => a.trim()).join(' / ')}
-                                </p>
+                                const isMultiBlank = q.correct_answer?.includes(';');
+
+                                if (q.type === 'multiple_choice') {
+                                  return (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+                                      {Object.entries(q.options || {}).map(([key, val]) => {
+                                        const isSelected = answers[q.id] === key;
+                                        const isCorrect = key === q.correct_answer;
+                                        const showCorrect = result !== null && isCorrect;
+                                        const showWrong = result !== null && isSelected && !isCorrect;
+
+                                        return (
+                                          <button
+                                            key={key}
+                                            onClick={() => handleAnswerSelect(q.id, key)}
+                                            disabled={result !== null || isViewMode}
+                                            className={`flex items-start text-left p-3 rounded-xl border-2 transition-all group/opt ${
+                                              showCorrect ? 'bg-green-50 border-green-500 shadow-sm'
+                                                : showWrong ? 'bg-red-50 border-red-500 shadow-sm'
+                                                : isSelected ? 'bg-primary-50 border-primary-500 shadow-sm'
+                                                : 'border-slate-100 bg-white hover:border-slate-300 hover:bg-slate-50'
+                                            }`}
+                                          >
+                                            <span className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 mr-3 transition-colors ${
+                                              showCorrect ? 'bg-green-500 text-white'
+                                                : showWrong ? 'bg-red-500 text-white'
+                                                : isSelected ? 'bg-primary-500 text-white'
+                                                : 'bg-slate-100 text-slate-600 group-hover/opt:bg-slate-200'
+                                            }`}>
+                                              {key}
+                                            </span>
+                                            <span className={`text-sm mt-0.5 font-medium leading-tight ${
+                                              showCorrect ? 'text-green-900' : showWrong ? 'text-red-900' : isSelected ? 'text-primary-900' : 'text-slate-700'
+                                            }`}>{val}</span>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  );
+                                }
+
+                                return (
+                                  <div className="space-y-3 relative mt-4">
+                                    {isMultiBlank ? (
+                                      (q.correct_answer || '').split(';').map((correctPart, bIdx) => {
+                                        const userVal = getBlankAnswerPart(fillAnswers[q.id], bIdx);
+                                        const isBlankCorrect = checkWrittenAnswer(userVal, correctPart);
+                                        const isBlankWrong = result !== null && !isBlankCorrect;
+
+                                        return (
+                                          <div key={bIdx} className="relative">
+                                            <div className="absolute left-3 top-3 text-xs font-bold text-slate-400">Blank {bIdx + 1}</div>
+                                            <input
+                                              type="text"
+                                              placeholder={`Answer ${bIdx + 1}`}
+                                              value={userVal}
+                                              onChange={(e) => {
+                                                if (result || isViewMode) return;
+                                                const currentVals = (fillAnswers[q.id] || '').split(';');
+                                                const blankCount = getBlankCount(q.correct_answer);
+                                                while (currentVals.length < blankCount) currentVals.push('');
+                                                currentVals[bIdx] = e.target.value;
+                                                setFillAnswers({ ...fillAnswers, [q.id]: currentVals.join(' ; ') });
+                                              }}
+                                              disabled={result !== null || isViewMode}
+                                              className={`w-full pl-16 pr-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 ${
+                                                isBlankCorrect ? 'border-green-500 bg-green-50 text-green-800'
+                                                  : isBlankWrong ? 'border-red-500 bg-red-50 text-red-800'
+                                                  : 'border-slate-200 bg-white'
+                                              }`}
+                                            />
+                                            {isBlankWrong && (
+                                              <p className="text-sm text-green-600 mt-0.5 font-medium">
+                                                Correct: {correctPart.split('|').map(a => a.trim()).join(' / ')}
+                                              </p>
+                                            )}
+                                          </div>
+                                        );
+                                      })
+                                    ) : q.type === 'written_answer' ? (
+                                      <textarea
+                                        placeholder="Type your answer here..."
+                                        rows={3}
+                                        value={fillAnswers[q.id] || ''}
+                                        onChange={(e) => handleFillChange(q.id, e.target.value)}
+                                        disabled={result !== null || isViewMode}
+                                        className={`w-full px-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 resize-y ${
+                                          result !== null
+                                            ? checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer)
+                                              ? 'border-green-500 bg-green-50 text-green-800'
+                                              : 'border-red-500 bg-red-50 text-red-800'
+                                            : 'border-slate-200 bg-white'
+                                        }`}
+                                      />
+                                    ) : (
+                                      <input
+                                        type="text"
+                                        placeholder="Type your answer..."
+                                        value={fillAnswers[q.id] || ''}
+                                        onChange={(e) => handleFillChange(q.id, e.target.value)}
+                                        disabled={result !== null || isViewMode}
+                                        className={`w-full px-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 ${
+                                          result !== null
+                                            ? checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer)
+                                              ? 'border-green-500 bg-green-50 text-green-800'
+                                              : 'border-red-500 bg-red-50 text-red-800'
+                                            : 'border-slate-200 bg-white'
+                                        }`}
+                                      />
+                                    )}
+                                    {!isMultiBlank && result !== null && !checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer) && (
+                                      <p className="text-sm text-green-600 mt-1 font-medium">Correct answer: {q.correct_answer.split('|').map(a => a.trim()).join(' / ')}</p>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+
+                              {/* Coach note for this question */}
+                              {coachFeedback?.[String(q.id)] && (
+                                <div className="mt-3">
+                                  <div className="bg-primary-50 border border-primary-200 rounded-xl p-4">
+                                    <p className="text-xs font-bold text-primary-700 uppercase tracking-wider mb-1">💬 Coach's Note</p>
+                                    <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{coachFeedback[String(q.id)]}</p>
+                                  </div>
+                                </div>
                               )}
                             </div>
-                          );
-                        })
-                      ) : q.type === 'written_answer' ? (
-                        <textarea
-                          placeholder="Type your answer here..."
-                          rows={3}
-                          value={fillAnswers[q.id] || ''}
-                          onChange={(e) => handleFillChange(q.id, e.target.value)}
-                          disabled={result !== null}
-                          className={`w-full px-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 resize-y ${
-                            result !== null
-                              ? checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer)
-                                ? 'border-green-500 bg-green-50 text-green-800'
-                                : 'border-red-500 bg-red-50 text-red-800'
-                              : 'border-slate-200 bg-white'
-                          }`}
-                        />
-                      ) : (
-                        <input
-                          type="text"
-                          placeholder="Type your answer..."
-                          value={fillAnswers[q.id] || ''}
-                          onChange={(e) => handleFillChange(q.id, e.target.value)}
-                          disabled={result !== null}
-                          className={`w-full px-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 ${
-                            result !== null
-                              ? checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer)
-                                ? 'border-green-500 bg-green-50 text-green-800'
-                                : 'border-red-500 bg-red-50 text-red-800'
-                              : 'border-slate-200 bg-white'
-                          }`}
-                        />
-                      )}
-                      {!isMultiBlank && result !== null && !checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer) && (
-                        <p className="text-sm text-green-600 mt-1 font-medium">Correct answer: {q.correct_answer.split('|').map(a => a.trim()).join(' / ')}</p>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {/* Coach note for this question */}
-                {coachFeedback?.[String(q.id)] && (
-                  <div className="pl-9 mt-3">
-                    <div className="bg-primary-50 border border-primary-200 rounded-xl p-4">
-                      <p className="text-xs font-bold text-primary-700 uppercase tracking-wider mb-1">💬 Coach's Note</p>
-                      <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{coachFeedback[String(q.id)]}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-              );
-            })}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })
