@@ -3,7 +3,7 @@ Authentication Router — login, register, current user info.
 Uses simple token-based auth (JWT).
 """
 import os
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 from jose import jwt
@@ -113,7 +113,16 @@ def list_users(db: Session = Depends(get_db)):
 
 
 @router.get("/me", response_model=UserResponse)
-def get_me(token: str, db: Session = Depends(get_db)):
+def get_me(request: Request, db: Session = Depends(get_db)):
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        # Fallback to query param just in case
+        token = request.query_params.get("token")
+        if not token:
+            raise HTTPException(status_code=401, detail="Missing authorization header")
+    else:
+        token = auth_header.split(" ")[1]
+    
     user = get_current_user(token, db)
     return UserResponse(
         id=user.id,
