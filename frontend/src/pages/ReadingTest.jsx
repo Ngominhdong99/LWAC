@@ -372,8 +372,215 @@ const ReadingTest = () => {
   const answeredCount = Object.keys(answers).length + Object.keys(fillAnswers).length;
   const progressPercent = lesson.questions.length > 0 ? Math.round((answeredCount / lesson.questions.length) * 100) : 0;
 
+  // Helper: renders a single question card
+  const renderQuestion = (q, globalIdx) => {
+    const hasInlineBlanks = (q.type === 'fill_blank' || q.type === 'written_answer') && /(_{2,}|\.{3,})/.test(q.question_text || '');
+
+    const renderInlineText = () => {
+      if (!hasInlineBlanks) return null;
+      const parts = (q.question_text || '').split(/(_{2,}|\.{3,})/g);
+      let blankIndex = 0;
+      const blankCount = getBlankCount(q.correct_answer);
+      const correctParts = (q.correct_answer || '').split(';').map(p => p.trim());
+
+      return parts.map((part, bIdx) => {
+        if (/^_{2,}$|^\.{3,}$/.test(part)) {
+          const currentBIdx = blankIndex++;
+          const userVal = getBlankAnswerPart(fillAnswers[q.id], currentBIdx);
+          const correctPart = correctParts[currentBIdx] || '';
+          const isBlankCorrect = result !== null && checkSingleBlank(userVal, correctPart);
+          const isBlankWrong = result !== null && !checkSingleBlank(userVal, correctPart);
+
+          return (
+            <span key={bIdx} className="relative inline-flex items-center">
+              <input
+                type="text"
+                value={userVal}
+                disabled={result !== null || isViewMode}
+                onChange={(e) => {
+                  const newVal = setBlankAnswerPart(fillAnswers[q.id] || '', currentBIdx, e.target.value, blankCount);
+                  handleFillChange(q.id, newVal);
+                }}
+                placeholder={`${globalIdx + 1}.${currentBIdx + 1}`}
+                className={`inline-block mx-1 px-2 py-1 border-b-2 bg-transparent focus:bg-slate-50 focus:outline-none transition-all w-28 md:w-36 text-center disabled:opacity-100 ${
+                  result !== null
+                    ? isBlankCorrect ? 'border-green-500 text-green-700 bg-green-50/50' : 'border-red-500 text-red-700 bg-red-50/50 line-through decoration-red-400'
+                    : 'border-slate-300 focus:border-primary-500 text-primary-700 font-semibold'
+                }`}
+              />
+              {isBlankWrong && (
+                <span className="text-green-600 font-bold text-xs ml-1 bg-green-50 px-1.5 py-0.5 rounded-md whitespace-nowrap">
+                  ✓ {correctPart.split('|').map(a => a.trim()).join(' / ')}
+                </span>
+              )}
+            </span>
+          );
+        }
+        return <span key={bIdx}>{part}</span>;
+      });
+    };
+
+    return (
+      <div key={q.id} id={`question-${q.id}`} className="group scroll-mt-24 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-all">
+        <div className="flex gap-4">
+          <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold shrink-0 shadow-sm text-sm ${
+            result !== null
+              ? q.type === 'multiple_choice'
+                ? answers[q.id] === q.correct_answer ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                : checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer) ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+              : (answers[q.id] || fillAnswers[q.id]) ? 'bg-primary-100 text-primary-700' : 'bg-slate-100 text-slate-600'
+          }`}>
+            {globalIdx + 1}
+          </span>
+          <div className="flex-1 w-full overflow-hidden">
+            {(q.type !== 'fill_blank' || !hasInlineBlanks) && (
+              <div className="text-base text-slate-800 font-semibold mb-4 leading-relaxed">{q.question_text}</div>
+            )}
+
+            {(() => {
+              if (hasInlineBlanks) {
+                return (
+                  <div className="text-base text-slate-800 font-medium leading-[2.5rem] p-4 bg-slate-50/50 rounded-xl border border-slate-100 text-justify">
+                    {renderInlineText()}
+                  </div>
+                );
+              }
+
+              const isMultiBlank = q.correct_answer?.includes(';');
+
+              if (q.type === 'multiple_choice') {
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {Object.entries(q.options || {}).map(([key, val]) => {
+                      const isSelected = answers[q.id] === key;
+                      const isCorrect = key === q.correct_answer;
+                      const showCorrect = result !== null && isCorrect;
+                      const showWrong = result !== null && isSelected && !isCorrect;
+
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => handleAnswerSelect(q.id, key)}
+                          disabled={result !== null || isViewMode}
+                          className={`flex items-start text-left p-3 rounded-xl border-2 transition-all group/opt ${
+                            showCorrect ? 'bg-green-50 border-green-500 shadow-sm'
+                              : showWrong ? 'bg-red-50 border-red-500 shadow-sm'
+                              : isSelected ? 'bg-primary-50 border-primary-500 shadow-sm'
+                              : 'border-slate-100 bg-white hover:border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 mr-3 transition-colors ${
+                            showCorrect ? 'bg-green-500 text-white'
+                              : showWrong ? 'bg-red-500 text-white'
+                              : isSelected ? 'bg-primary-500 text-white'
+                              : 'bg-slate-100 text-slate-600 group-hover/opt:bg-slate-200'
+                          }`}>
+                            {key}
+                          </span>
+                          <span className={`text-sm mt-0.5 font-medium leading-tight ${
+                            showCorrect ? 'text-green-900' : showWrong ? 'text-red-900' : isSelected ? 'text-primary-900' : 'text-slate-700'
+                          }`}>{val}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-3 relative">
+                  {isMultiBlank ? (
+                    (q.correct_answer || '').split(';').map((correctPart, bIdx) => {
+                      const userVal = getBlankAnswerPart(fillAnswers[q.id], bIdx);
+                      const isBlankCorrect = checkWrittenAnswer(userVal, correctPart);
+                      const isBlankWrong = result !== null && !isBlankCorrect;
+
+                      return (
+                        <div key={bIdx} className="relative">
+                          <div className="absolute left-3 top-3 text-xs font-bold text-slate-400">Blank {bIdx + 1}</div>
+                          <input
+                            type="text"
+                            placeholder={`Answer ${bIdx + 1}`}
+                            value={userVal}
+                            onChange={(e) => {
+                              if (result || isViewMode) return;
+                              const currentVals = (fillAnswers[q.id] || '').split(';');
+                              const blankCount = getBlankCount(q.correct_answer);
+                              while (currentVals.length < blankCount) currentVals.push('');
+                              currentVals[bIdx] = e.target.value;
+                              setFillAnswers({ ...fillAnswers, [q.id]: currentVals.join(' ; ') });
+                            }}
+                            disabled={result !== null || isViewMode}
+                            className={`w-full pl-16 pr-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 ${
+                              isBlankCorrect ? 'border-green-500 bg-green-50 text-green-800'
+                                : isBlankWrong ? 'border-red-500 bg-red-50 text-red-800'
+                                : 'border-slate-200 bg-white'
+                            }`}
+                          />
+                          {isBlankWrong && (
+                            <p className="text-sm text-green-600 mt-0.5 font-medium">
+                              Correct: {correctPart.split('|').map(a => a.trim()).join(' / ')}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })
+                  ) : q.type === 'written_answer' ? (
+                    <textarea
+                      placeholder="Type your answer here..."
+                      rows={3}
+                      value={fillAnswers[q.id] || ''}
+                      onChange={(e) => handleFillChange(q.id, e.target.value)}
+                      disabled={result !== null || isViewMode}
+                      className={`w-full px-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 resize-y ${
+                        result !== null
+                          ? checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer)
+                            ? 'border-green-500 bg-green-50 text-green-800'
+                            : 'border-red-500 bg-red-50 text-red-800'
+                          : 'border-slate-200 bg-white'
+                      }`}
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder="Type your answer..."
+                      value={fillAnswers[q.id] || ''}
+                      onChange={(e) => handleFillChange(q.id, e.target.value)}
+                      disabled={result !== null || isViewMode}
+                      className={`w-full px-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 ${
+                        result !== null
+                          ? checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer)
+                            ? 'border-green-500 bg-green-50 text-green-800'
+                            : 'border-red-500 bg-red-50 text-red-800'
+                          : 'border-slate-200 bg-white'
+                      }`}
+                    />
+                  )}
+                  {!isMultiBlank && result !== null && !checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer) && (
+                    <p className="text-sm text-green-600 mt-1 font-medium">Correct answer: {q.correct_answer.split('|').map(a => a.trim()).join(' / ')}</p>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Coach note */}
+            {coachFeedback?.[String(q.id)] && (
+              <div className="mt-3">
+                <div className="bg-primary-50 border border-primary-200 rounded-xl p-4">
+                  <p className="text-xs font-bold text-primary-700 uppercase tracking-wider mb-1">💬 Coach's Note</p>
+                  <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{coachFeedback[String(q.id)]}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="h-full flex flex-col bg-secondary">
+    <div className="h-full flex flex-col bg-secondary" ref={textRef}>
+      {/* Sticky Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-40">
         <div className="flex items-center justify-between px-4 py-3">
           <button onClick={() => navigate('/reading')} className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors">
@@ -393,584 +600,147 @@ const ReadingTest = () => {
         </div>
       </header>
 
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden pb-16 md:pb-0" ref={textRef}>
-        <section className="flex-1 md:w-1/2 p-4 md:p-8 bg-white md:border-r border-slate-200 shadow-sm relative overflow-y-auto">
-          <div className="max-w-prose mx-auto">
-            <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-6 leading-tight select-text">{lesson.title}</h2>
-            
-            {/* Exercise-based Layout */}
-            {lesson.exercises && lesson.exercises.length > 0 ? (
-              <div className="space-y-8">
-                {lesson.exercises.map((ex, exIdx) => (
-                  <div key={ex.id} className="space-y-4">
-                    {lesson.exercises.length > 1 && (
-                      <div className="flex items-center space-x-2 sticky top-0 bg-white/90 backdrop-blur-sm py-2 z-10">
-                        <span className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center text-xs font-bold shadow-sm">{exIdx + 1}</span>
-                        <h3 className="text-lg font-bold text-blue-800">{ex.title || `Exercise ${exIdx + 1}`}</h3>
+      {/* Single Scrollable Exam Paper */}
+      <main className="flex-1 overflow-y-auto pb-24">
+        <div className="max-w-3xl mx-auto px-4 md:px-8 py-6 space-y-8">
+
+          {/* Exercise-based layout */}
+          {lesson.exercises && lesson.exercises.length > 0 ? (
+            lesson.exercises.map((ex, exIdx) => {
+              const prevQuestionCount = lesson.exercises.slice(0, exIdx).reduce((sum, e) => sum + (e.questions?.length || 0), 0);
+              const exerciseQuestions = ex.questions || [];
+
+              return (
+                <section key={ex.id} className="space-y-6">
+                  {/* Exercise Header */}
+                  {lesson.exercises.length > 1 && (
+                    <div className="flex items-center gap-3 sticky top-0 bg-secondary/95 backdrop-blur-sm py-3 z-10 -mx-4 px-4 md:-mx-8 md:px-8 border-b border-slate-200/60">
+                      <span className="w-8 h-8 rounded-lg bg-primary-600 text-white flex items-center justify-center text-sm font-bold shadow-sm">{exIdx + 1}</span>
+                      <h2 className="text-lg font-bold text-primary-800 tracking-tight">{ex.title || `Exercise ${exIdx + 1}`}</h2>
+                      <div className="flex-1 h-px bg-slate-300/50"></div>
+                      <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                        Q{prevQuestionCount + 1}–{prevQuestionCount + exerciseQuestions.length}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Exercise Image */}
+                  {ex.image_url && (
+                    <div className="rounded-2xl overflow-hidden shadow-md border border-slate-200">
+                      <img
+                        src={ex.image_url.startsWith('http') ? ex.image_url : `${API_URL}${ex.image_url}`}
+                        alt={ex.title || `Exercise ${exIdx + 1}`}
+                        className="w-full object-contain max-h-[500px] bg-slate-50"
+                      />
+                    </div>
+                  )}
+
+                  {/* Reading Passage */}
+                  {ex.context && (
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 md:p-8">
+                      <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
+                        <div className="w-1 h-5 bg-primary-500 rounded-full"></div>
+                        <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Reading Passage</h3>
                       </div>
-                    )}
-                    {ex.image_url && (
-                      <div className="mb-4">
-                        <img 
-                          src={ex.image_url.startsWith('http') ? ex.image_url : `${API_URL}${ex.image_url}`} 
-                          alt={ex.title || `Exercise ${exIdx + 1}`}
-                          className="w-full rounded-xl shadow-md border border-slate-200"
-                        />
-                      </div>
-                    )}
-                    {ex.context && (
-                      <div className="space-y-4 text-slate-700 text-base md:text-lg leading-relaxed font-serif selection:bg-primary-200 selection:text-primary-900 select-text">
+                      <div className="text-slate-700 text-base md:text-[17px] leading-relaxed md:leading-[1.9] font-serif selection:bg-primary-200 selection:text-primary-900 select-text text-justify">
                         <MarkdownRenderer>{ex.context}</MarkdownRenderer>
                       </div>
-                    )}
-                    {exIdx < lesson.exercises.length - 1 && (
-                      <hr className="border-slate-200 my-6" />
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              /* Old single-passage layout (backward compat) */
-              <>
-                {lesson.content?.image_url && (
-                  <div className="mb-6">
-                    <img 
-                      src={lesson.content.image_url.startsWith('http') ? lesson.content.image_url : `${API_URL}${lesson.content.image_url}`} 
-                      alt={lesson.title} 
-                      className="w-full rounded-xl shadow-md border border-slate-200"
-                    />
-                  </div>
-                )}
-                <div className="space-y-6 text-slate-700 text-base md:text-lg leading-relaxed font-serif selection:bg-primary-200 selection:text-primary-900 select-text">
+                    </div>
+                  )}
+
+                  {/* Questions */}
+                  {exerciseQuestions.length > 0 && (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 px-1">
+                        <div className="w-1 h-5 bg-primary-500 rounded-full"></div>
+                        <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">
+                          Questions {prevQuestionCount + 1}–{prevQuestionCount + exerciseQuestions.length}
+                        </h3>
+                      </div>
+                      {exerciseQuestions.map((q, qIdx) => renderQuestion(q, prevQuestionCount + qIdx))}
+                    </div>
+                  )}
+
+                  {/* Exercise Divider */}
+                  {exIdx < lesson.exercises.length - 1 && (
+                    <div className="flex items-center gap-4 py-2">
+                      <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent"></div>
+                    </div>
+                  )}
+                </section>
+              );
+            })
+          ) : (
+            /* Legacy single-passage layout */
+            <section className="space-y-6">
+              {/* Image */}
+              {lesson.content?.image_url && (
+                <div className="rounded-2xl overflow-hidden shadow-md border border-slate-200">
+                  <img
+                    src={lesson.content.image_url.startsWith('http') ? lesson.content.image_url : `${API_URL}${lesson.content.image_url}`}
+                    alt={lesson.title}
+                    className="w-full object-contain max-h-[500px] bg-slate-50"
+                  />
+                </div>
+              )}
+
+              {/* Reading Passage */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 md:p-8">
+                <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
+                  <div className="w-1 h-5 bg-primary-500 rounded-full"></div>
+                  <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Reading Passage</h3>
+                </div>
+                <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-6 leading-tight">{lesson.title}</h2>
+                <div className="text-slate-700 text-base md:text-[17px] leading-relaxed md:leading-[1.9] font-serif selection:bg-primary-200 selection:text-primary-900 select-text text-justify">
                   {lesson.content.paragraphs ? (
                     lesson.content.paragraphs.map(p => (
-                      <p key={p.id} className="text-justify select-text">{p.text}</p>
+                      <p key={p.id} className="mb-4 select-text">{p.text}</p>
                     ))
                   ) : lesson.content.passage ? (
                     <MarkdownRenderer>{lesson.content.passage}</MarkdownRenderer>
                   ) : null}
                 </div>
-              </>
-            )}
-          </div>
-          
-          {/* Floating Action Menu for Text Selection */}
-          {selection && !askTeacherText && (
-            <div 
-              className="fixed z-[100] animate-in fade-in zoom-in-95 duration-200"
-              style={{
-                top: Math.max(10, selection.rect.top - 60) + 'px',
-                left: selection.rect.left + (selection.rect.width / 2) + 'px',
-                transform: 'translateX(-50%)' // Center exactly over the word
-              }}
-            >
-              <div className="bg-slate-900 shadow-xl rounded-xl flex items-center p-1.5 text-white/90 gap-1 ring-1 ring-slate-800/50">
-                {VOCAB_MAP[selection.text.toLowerCase()] && (
-                  <div className="px-3 py-1.5 border-r border-slate-700 max-w-[200px] truncate text-sm">
-                    {VOCAB_MAP[selection.text.toLowerCase()].meaning}
-                  </div>
-                )}
-                <button 
-                  onClick={() => playAudio(selection.text)}
-                  className="p-2 hover:bg-slate-800 hover:text-white rounded-lg transition-colors flex items-center gap-2"
-                  title="Listen"
-                >
-                  <Volume2 size={16} />
-                </button>
-                <button 
-                  onClick={() => saveToVocabVault(selection.text)}
-                  className={`p-2 rounded-lg transition-colors flex items-center gap-2 ${savedSelection ? 'text-emerald-400 bg-emerald-400/10' : 'hover:bg-slate-800 hover:text-amber-400'}`}
-                  title="Save to Vault"
-                >
-                  {savedSelection ? <Check size={16} /> : <Plus size={16} />}
-                </button>
-                {user?.role === 'student' && (
-                  <button 
-                    onClick={() => {
-                      setAskTeacherText(selection.text);
-                      window.getSelection().empty();
-                    }}
-                    className="p-2 hover:bg-slate-800 hover:text-violet-400 rounded-lg transition-colors flex items-center gap-2"
-                    title="Ask Teacher"
-                  >
-                    <HelpCircle size={16} />
-                  </button>
-                )}
               </div>
-              <div className="w-3 h-3 bg-slate-900 absolute left-1/2 -bottom-1.5 transform -translate-x-1/2 rotate-45 border-r border-b border-slate-800/50"></div>
-            </div>
+
+              {/* Questions */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 px-1">
+                  <div className="w-1 h-5 bg-primary-500 rounded-full"></div>
+                  <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">
+                    Questions 1–{lesson.questions.length}
+                  </h3>
+                </div>
+                {lesson.questions.map((q, idx) => renderQuestion(q, idx))}
+              </div>
+            </section>
           )}
-        </section>
+        </div>
 
-        <section className="flex-1 md:w-1/2 overflow-y-auto p-4 md:p-8 bg-slate-50 relative z-0">
-          <div className="max-w-xl mx-auto space-y-6 pb-24">
-            <h3 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2">
-              Questions 1-{lesson.questions.length}
-            </h3>
-
-            {/* Exercise-grouped questions */}
-            {lesson.exercises && lesson.exercises.length > 0 ? (
-              lesson.exercises.map((ex, exIdx) => {
-                const prevQuestionCount = lesson.exercises.slice(0, exIdx).reduce((sum, e) => sum + (e.questions?.length || 0), 0);
-                return (
-                  <div key={ex.id}>
-                    {lesson.exercises.length > 1 && (
-                      <div className="flex items-center gap-3 mt-6 mb-4">
-                        <span className="w-7 h-7 rounded-lg bg-primary-600 text-white flex items-center justify-center text-xs font-bold shadow-sm">{exIdx + 1}</span>
-                        <h4 className="text-sm font-bold text-primary-700 uppercase tracking-wider">{ex.title || `Exercise ${exIdx + 1}`}</h4>
-                        <div className="flex-1 h-px bg-slate-200"></div>
-                      </div>
-                    )}
-                    {(ex.questions || []).map((q, qIdx) => {
-                      const globalIdx = prevQuestionCount + qIdx;
-                      const hasInlineBlanks = (q.type === 'fill_blank' || q.type === 'written_answer') && /(_{2,}|\.{3,})/.test(q.question_text || '');
-
-                      const renderInlineText = () => {
-                        if (!hasInlineBlanks) return null;
-                        const parts = (q.question_text || '').split(/(_{2,}|\.{3,})/g);
-                        let blankIndex = 0;
-                        const blankCount = getBlankCount(q.correct_answer);
-                        const correctParts = (q.correct_answer || '').split(';').map(p => p.trim());
-
-                        return parts.map((part, bIdx) => {
-                          if (/^_{2,}$|^\.{3,}$/.test(part)) {
-                            const currentBIdx = blankIndex++;
-                            const userVal = getBlankAnswerPart(fillAnswers[q.id], currentBIdx);
-                            const correctPart = correctParts[currentBIdx] || '';
-                            const isBlankCorrect = result !== null && checkSingleBlank(userVal, correctPart);
-                            const isBlankWrong = result !== null && !checkSingleBlank(userVal, correctPart);
-
-                            return (
-                              <span key={bIdx} className="relative inline-flex items-center">
-                                <input
-                                  type="text"
-                                  value={userVal}
-                                  disabled={result !== null || isViewMode}
-                                  onChange={(e) => {
-                                    const newVal = setBlankAnswerPart(fillAnswers[q.id] || '', currentBIdx, e.target.value, blankCount);
-                                    handleFillChange(q.id, newVal);
-                                  }}
-                                  placeholder={`${globalIdx + 1}.${currentBIdx + 1}`}
-                                  className={`inline-block mx-1 px-2 py-1 border-b-2 bg-transparent focus:bg-slate-50 focus:outline-none transition-all w-28 md:w-36 text-center disabled:opacity-100 ${
-                                    result !== null
-                                      ? isBlankCorrect ? 'border-green-500 text-green-700 bg-green-50/50' : 'border-red-500 text-red-700 bg-red-50/50 line-through decoration-red-400'
-                                      : 'border-slate-300 focus:border-primary-500 text-primary-700 font-semibold'
-                                  }`}
-                                />
-                                {isBlankWrong && (
-                                  <span className="text-green-600 font-bold text-xs ml-1 bg-green-50 px-1.5 py-0.5 rounded-md whitespace-nowrap">
-                                    ✓ {correctPart.split('|').map(a => a.trim()).join(' / ')}
-                                  </span>
-                                )}
-                              </span>
-                            );
-                          }
-                          return <span key={bIdx}>{part}</span>;
-                        });
-                      };
-
-                      return (
-                        <div key={q.id} id={`question-${q.id}`} className="group scroll-mt-24 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-all">
-                          <div className="flex gap-4">
-                            <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold shrink-0 shadow-sm text-sm ${
-                              result !== null
-                                ? q.type === 'multiple_choice'
-                                  ? answers[q.id] === q.correct_answer ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                                  : checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer) ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                                : (answers[q.id] || fillAnswers[q.id]) ? 'bg-primary-100 text-primary-700' : 'bg-slate-100 text-slate-600'
-                            }`}>
-                              {globalIdx + 1}
-                            </span>
-                            <div className="flex-1 w-full overflow-hidden">
-                              {(q.type !== 'fill_blank' || !hasInlineBlanks) && (
-                                <div className="text-base text-slate-800 font-semibold mb-4 leading-relaxed">{q.question_text}</div>
-                              )}
-
-                              {(() => {
-                                if (hasInlineBlanks) {
-                                  return (
-                                    <div className="text-base text-slate-800 font-medium leading-[2.5rem] p-4 bg-slate-50/50 rounded-xl border border-slate-100 text-justify">
-                                      {renderInlineText()}
-                                    </div>
-                                  );
-                                }
-
-                                const isMultiBlank = q.correct_answer?.includes(';');
-
-                                if (q.type === 'multiple_choice') {
-                                  return (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
-                                      {Object.entries(q.options || {}).map(([key, val]) => {
-                                        const isSelected = answers[q.id] === key;
-                                        const isCorrect = key === q.correct_answer;
-                                        const showCorrect = result !== null && isCorrect;
-                                        const showWrong = result !== null && isSelected && !isCorrect;
-
-                                        return (
-                                          <button
-                                            key={key}
-                                            onClick={() => handleAnswerSelect(q.id, key)}
-                                            disabled={result !== null || isViewMode}
-                                            className={`flex items-start text-left p-3 rounded-xl border-2 transition-all group/opt ${
-                                              showCorrect ? 'bg-green-50 border-green-500 shadow-sm'
-                                                : showWrong ? 'bg-red-50 border-red-500 shadow-sm'
-                                                : isSelected ? 'bg-primary-50 border-primary-500 shadow-sm'
-                                                : 'border-slate-100 bg-white hover:border-slate-300 hover:bg-slate-50'
-                                            }`}
-                                          >
-                                            <span className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 mr-3 transition-colors ${
-                                              showCorrect ? 'bg-green-500 text-white'
-                                                : showWrong ? 'bg-red-500 text-white'
-                                                : isSelected ? 'bg-primary-500 text-white'
-                                                : 'bg-slate-100 text-slate-600 group-hover/opt:bg-slate-200'
-                                            }`}>
-                                              {key}
-                                            </span>
-                                            <span className={`text-sm mt-0.5 font-medium leading-tight ${
-                                              showCorrect ? 'text-green-900' : showWrong ? 'text-red-900' : isSelected ? 'text-primary-900' : 'text-slate-700'
-                                            }`}>{val}</span>
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
-                                  );
-                                }
-
-                                return (
-                                  <div className="space-y-3 relative mt-4">
-                                    {isMultiBlank ? (
-                                      (q.correct_answer || '').split(';').map((correctPart, bIdx) => {
-                                        const userVal = getBlankAnswerPart(fillAnswers[q.id], bIdx);
-                                        const isBlankCorrect = checkWrittenAnswer(userVal, correctPart);
-                                        const isBlankWrong = result !== null && !isBlankCorrect;
-
-                                        return (
-                                          <div key={bIdx} className="relative">
-                                            <div className="absolute left-3 top-3 text-xs font-bold text-slate-400">Blank {bIdx + 1}</div>
-                                            <input
-                                              type="text"
-                                              placeholder={`Answer ${bIdx + 1}`}
-                                              value={userVal}
-                                              onChange={(e) => {
-                                                if (result || isViewMode) return;
-                                                const currentVals = (fillAnswers[q.id] || '').split(';');
-                                                const blankCount = getBlankCount(q.correct_answer);
-                                                while (currentVals.length < blankCount) currentVals.push('');
-                                                currentVals[bIdx] = e.target.value;
-                                                setFillAnswers({ ...fillAnswers, [q.id]: currentVals.join(' ; ') });
-                                              }}
-                                              disabled={result !== null || isViewMode}
-                                              className={`w-full pl-16 pr-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 ${
-                                                isBlankCorrect ? 'border-green-500 bg-green-50 text-green-800'
-                                                  : isBlankWrong ? 'border-red-500 bg-red-50 text-red-800'
-                                                  : 'border-slate-200 bg-white'
-                                              }`}
-                                            />
-                                            {isBlankWrong && (
-                                              <p className="text-sm text-green-600 mt-0.5 font-medium">
-                                                Correct: {correctPart.split('|').map(a => a.trim()).join(' / ')}
-                                              </p>
-                                            )}
-                                          </div>
-                                        );
-                                      })
-                                    ) : q.type === 'written_answer' ? (
-                                      <textarea
-                                        placeholder="Type your answer here..."
-                                        rows={3}
-                                        value={fillAnswers[q.id] || ''}
-                                        onChange={(e) => handleFillChange(q.id, e.target.value)}
-                                        disabled={result !== null || isViewMode}
-                                        className={`w-full px-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 resize-y ${
-                                          result !== null
-                                            ? checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer)
-                                              ? 'border-green-500 bg-green-50 text-green-800'
-                                              : 'border-red-500 bg-red-50 text-red-800'
-                                            : 'border-slate-200 bg-white'
-                                        }`}
-                                      />
-                                    ) : (
-                                      <input
-                                        type="text"
-                                        placeholder="Type your answer..."
-                                        value={fillAnswers[q.id] || ''}
-                                        onChange={(e) => handleFillChange(q.id, e.target.value)}
-                                        disabled={result !== null || isViewMode}
-                                        className={`w-full px-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 ${
-                                          result !== null
-                                            ? checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer)
-                                              ? 'border-green-500 bg-green-50 text-green-800'
-                                              : 'border-red-500 bg-red-50 text-red-800'
-                                            : 'border-slate-200 bg-white'
-                                        }`}
-                                      />
-                                    )}
-                                    {!isMultiBlank && result !== null && !checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer) && (
-                                      <p className="text-sm text-green-600 mt-1 font-medium">Correct answer: {q.correct_answer.split('|').map(a => a.trim()).join(' / ')}</p>
-                                    )}
-                                  </div>
-                                );
-                              })()}
-
-                              {/* Coach note for this question */}
-                              {coachFeedback?.[String(q.id)] && (
-                                <div className="mt-3">
-                                  <div className="bg-primary-50 border border-primary-200 rounded-xl p-4">
-                                    <p className="text-xs font-bold text-primary-700 uppercase tracking-wider mb-1">💬 Coach's Note</p>
-                                    <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{coachFeedback[String(q.id)]}</p>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })
-            ) : (
-              /* Old un-grouped questions (backward compat) */
-              lesson.questions.map((q, idx) => {
-                const globalIdx = idx;
-                const hasInlineBlanks = (q.type === 'fill_blank' || q.type === 'written_answer') && /(_{2,}|\.{3,})/.test(q.question_text || '');
-                
-                const renderInlineText = () => {
-                  if (!hasInlineBlanks) return q.question_text;
-                  
-                  const parts = (q.question_text || '').split(/(_{2,}|\.{3,})/g);
-                  let blankIndex = 0;
-                  const blankCount = getBlankCount(q.correct_answer);
-                  const correctParts = (q.correct_answer || '').split(';').map(p => p.trim());
-
-                  return parts.map((part, bIdx) => {
-                    if (/^_{2,}$|^\.{3,}$/.test(part)) {
-                      const currentBIdx = blankIndex++;
-                      const userVal = getBlankAnswerPart(fillAnswers[q.id], currentBIdx);
-                      const correctPart = correctParts[currentBIdx] || '';
-                      const isBlankCorrect = checkWrittenAnswer(userVal, correctPart);
-                      const isBlankWrong = result !== null && !isBlankCorrect;
-
-                      return (
-                        <span key={bIdx} className="inline-block mx-1">
-                          <input
-                            type="text"
-                            value={userVal}
-                            onChange={(e) => {
-                              if (result || isViewMode) return;
-                              const currentVals = (fillAnswers[q.id] || '').split(';');
-                              while (currentVals.length < blankCount) currentVals.push('');
-                              currentVals[currentBIdx] = e.target.value;
-                              setFillAnswers({ ...fillAnswers, [q.id]: currentVals.join(' ; ') });
-                            }}
-                            disabled={result !== null || isViewMode}
-                            placeholder={`${globalIdx + 1}.${currentBIdx + 1}`}
-                            className={`w-32 px-2 py-1 text-center font-bold text-primary-800 border-b-2 bg-transparent transition-all focus:outline-none focus:border-primary-500 placeholder:text-primary-300 placeholder:font-normal ${
-                              result !== null
-                                ? isBlankCorrect
-                                  ? 'border-green-500 text-green-700'
-                                  : 'border-red-500 text-red-700'
-                                : 'border-slate-300 hover:border-primary-400'
-                            }`}
-                          />
-                          {isBlankWrong && (
-                            <span className="absolute -mt-5 bg-white border border-red-200 text-red-600 text-[10px] px-1.5 py-0.5 rounded shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
-                              {correctPart.split('|').map(a => a.trim()).join(' / ')}
-                            </span>
-                          )}
-                        </span>
-                      );
-                    }
-                    return <span key={bIdx}>{part}</span>;
-                  });
-                };
-
-                return (
-                  <div key={q.id} id={`question-${q.id}`} className="group scroll-mt-24 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-all">
-                    <div className="flex gap-4">
-                      <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold shrink-0 shadow-sm text-sm ${
-                        result !== null
-                          ? q.type === 'multiple_choice' 
-                            ? answers[q.id] === q.correct_answer ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                            : checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer) ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                          : (answers[q.id] || fillAnswers[q.id]) ? 'bg-primary-100 text-primary-700' : 'bg-slate-100 text-slate-600'
-                      }`}>
-                        {globalIdx + 1}
-                      </span>
-                      <div className="flex-1 w-full overflow-hidden">
-                        {(q.type !== 'fill_blank' || !hasInlineBlanks) && (
-                          <div className="text-base text-slate-800 font-semibold mb-4 leading-relaxed">{q.question_text}</div>
-                        )}
-
-                        {(() => {
-                          if (hasInlineBlanks) {
-                            return (
-                              <div className="text-base text-slate-800 font-medium leading-[2.5rem] p-4 bg-slate-50/50 rounded-xl border border-slate-100 text-justify">
-                                {renderInlineText()}
-                              </div>
-                            );
-                          }
-
-                          const isMultiBlank = q.correct_answer?.includes(';');
-
-                          if (q.type === 'multiple_choice') {
-                            return (
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
-                                {Object.entries(q.options || {}).map(([key, val]) => {
-                                  const isSelected = answers[q.id] === key;
-                                  const isCorrect = key === q.correct_answer;
-                                  const showCorrect = result !== null && isCorrect;
-                                  const showWrong = result !== null && isSelected && !isCorrect;
-
-                                  return (
-                                    <button
-                                      key={key}
-                                      onClick={() => handleAnswerSelect(q.id, key)}
-                                      disabled={result !== null || isViewMode}
-                                      className={`flex items-start text-left p-3 rounded-xl border-2 transition-all group/opt ${
-                                        showCorrect ? 'bg-green-50 border-green-500 shadow-sm'
-                                          : showWrong ? 'bg-red-50 border-red-500 shadow-sm'
-                                          : isSelected ? 'bg-primary-50 border-primary-500 shadow-sm'
-                                          : 'border-slate-100 bg-white hover:border-slate-300 hover:bg-slate-50'
-                                      }`}
-                                    >
-                                      <span className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-sm shrink-0 mr-3 transition-colors ${
-                                        showCorrect ? 'bg-green-500 text-white'
-                                          : showWrong ? 'bg-red-500 text-white'
-                                          : isSelected ? 'bg-primary-500 text-white'
-                                          : 'bg-slate-100 text-slate-600 group-hover/opt:bg-slate-200'
-                                      }`}>
-                                        {key}
-                                      </span>
-                                      <span className={`text-sm mt-0.5 font-medium leading-tight ${
-                                        showCorrect ? 'text-green-900' : showWrong ? 'text-red-900' : isSelected ? 'text-primary-900' : 'text-slate-700'
-                                      }`}>{val}</span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            );
-                          }
-
-                          return (
-                            <div className="space-y-3 relative mt-4">
-                              {isMultiBlank ? (
-                                (q.correct_answer || '').split(';').map((correctPart, bIdx) => {
-                                  const userVal = getBlankAnswerPart(fillAnswers[q.id], bIdx);
-                                  const isBlankCorrect = checkWrittenAnswer(userVal, correctPart);
-                                  const isBlankWrong = result !== null && !isBlankCorrect;
-
-                                  return (
-                                    <div key={bIdx} className="relative">
-                                      <div className="absolute left-3 top-3 text-xs font-bold text-slate-400">Blank {bIdx + 1}</div>
-                                      <input
-                                        type="text"
-                                        placeholder={`Answer ${bIdx + 1}`}
-                                        value={userVal}
-                                        onChange={(e) => {
-                                          if (result || isViewMode) return;
-                                          const currentVals = (fillAnswers[q.id] || '').split(';');
-                                          const blankCount = getBlankCount(q.correct_answer);
-                                          while (currentVals.length < blankCount) currentVals.push('');
-                                          currentVals[bIdx] = e.target.value;
-                                          setFillAnswers({ ...fillAnswers, [q.id]: currentVals.join(' ; ') });
-                                        }}
-                                        disabled={result !== null || isViewMode}
-                                        className={`w-full pl-16 pr-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 ${
-                                          isBlankCorrect ? 'border-green-500 bg-green-50 text-green-800'
-                                            : isBlankWrong ? 'border-red-500 bg-red-50 text-red-800'
-                                            : 'border-slate-200 bg-white'
-                                        }`}
-                                      />
-                                      {isBlankWrong && (
-                                        <p className="text-sm text-green-600 mt-0.5 font-medium">
-                                          Correct: {correctPart.split('|').map(a => a.trim()).join(' / ')}
-                                        </p>
-                                      )}
-                                    </div>
-                                  );
-                                })
-                              ) : q.type === 'written_answer' ? (
-                                <textarea
-                                  placeholder="Type your answer here..."
-                                  rows={3}
-                                  value={fillAnswers[q.id] || ''}
-                                  onChange={(e) => handleFillChange(q.id, e.target.value)}
-                                  disabled={result !== null || isViewMode}
-                                  className={`w-full px-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 resize-y ${
-                                    result !== null
-                                      ? checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer)
-                                        ? 'border-green-500 bg-green-50 text-green-800'
-                                        : 'border-red-500 bg-red-50 text-red-800'
-                                      : 'border-slate-200 bg-white'
-                                  }`}
-                                />
-                              ) : (
-                                <input
-                                  type="text"
-                                  placeholder="Type your answer..."
-                                  value={fillAnswers[q.id] || ''}
-                                  onChange={(e) => handleFillChange(q.id, e.target.value)}
-                                  disabled={result !== null || isViewMode}
-                                  className={`w-full px-4 py-2.5 rounded-xl border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 ${
-                                    result !== null
-                                      ? checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer)
-                                        ? 'border-green-500 bg-green-50 text-green-800'
-                                        : 'border-red-500 bg-red-50 text-red-800'
-                                      : 'border-slate-200 bg-white'
-                                  }`}
-                                />
-                              )}
-                              {!isMultiBlank && result !== null && !checkWrittenAnswer(fillAnswers[q.id] || '', q.correct_answer) && (
-                                <p className="text-sm text-green-600 mt-1 font-medium">Correct answer: {q.correct_answer.split('|').map(a => a.trim()).join(' / ')}</p>
-                              )}
-                            </div>
-                          );
-                        })()}
-
-                        {/* Coach note for this question */}
-                        {coachFeedback?.[String(q.id)] && (
-                          <div className="pl-9 mt-3">
-                            <div className="bg-primary-50 border border-primary-200 rounded-xl p-4">
-                              <p className="text-xs font-bold text-primary-700 uppercase tracking-wider mb-1">💬 Coach's Note</p>
-                              <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{coachFeedback[String(q.id)]}</p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          {/* Bottom Action Bar */}
+        {/* Bottom Action Bar */}
+        <div className="fixed bottom-16 md:bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-slate-200 z-30">
           {result ? (
-            <div className="fixed md:absolute bottom-16 md:bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-slate-200 z-10">
-              <div className="flex flex-col sm:flex-row justify-between items-center gap-3 max-w-xl mx-auto">
-                <div className="text-lg font-bold text-slate-800">
-                  Score: <span className="text-primary-600 text-2xl ml-1">{result.score}%</span>
-                  <span className="text-sm font-medium text-slate-500 ml-2">({result.correct}/{result.total})</span>
-                </div>
-                <div className="flex gap-2 w-full sm:w-auto">
-                  <button onClick={() => navigate('/reading')}
-                    className="flex-1 sm:flex-initial flex items-center justify-center space-x-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 py-3 rounded-xl font-semibold transition-colors">
-                    <ArrowLeft size={16} />
-                    <span>All Lessons</span>
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-3 max-w-3xl mx-auto">
+              <div className="text-lg font-bold text-slate-800">
+                Score: <span className="text-primary-600 text-2xl ml-1">{result.score}%</span>
+                <span className="text-sm font-medium text-slate-500 ml-2">({result.correct}/{result.total})</span>
+              </div>
+              <div className="flex gap-2 w-full sm:w-auto">
+                <button onClick={() => navigate('/reading')}
+                  className="flex-1 sm:flex-initial flex items-center justify-center space-x-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 py-3 rounded-xl font-semibold transition-colors">
+                  <ArrowLeft size={16} />
+                  <span>All Lessons</span>
+                </button>
+                {nextLesson && (
+                  <button onClick={() => navigate(`/reading/${nextLesson.id}`)}
+                    className="flex-1 sm:flex-initial flex items-center justify-center space-x-2 bg-primary-600 hover:bg-primary-700 text-white px-5 py-3 rounded-xl font-semibold shadow-lg transition-colors">
+                    <span>Next Lesson</span>
+                    <ArrowRight size={16} />
                   </button>
-                  {nextLesson && (
-                    <button onClick={() => navigate(`/reading/${nextLesson.id}`)}
-                      className="flex-1 sm:flex-initial flex items-center justify-center space-x-2 bg-primary-600 hover:bg-primary-700 text-white px-5 py-3 rounded-xl font-semibold shadow-lg transition-colors">
-                      <span>Next Lesson</span>
-                      <ArrowRight size={16} />
-                    </button>
-                  )}
-                </div>
+                )}
               </div>
             </div>
           ) : !isViewMode && (
-            <div className="fixed md:absolute bottom-16 md:bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-slate-200 flex justify-end z-10">
+            <div className="flex justify-end max-w-3xl mx-auto">
               <button onClick={handleSubmit} disabled={isSubmitting}
                 className={`flex items-center space-x-2 px-6 py-3 rounded-xl font-semibold shadow-lg transition-transform ${isSubmitting ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-slate-900 hover:bg-slate-800 text-white hover:scale-105'}`}>
                 <span>{isSubmitting ? 'Submitting...' : 'Submit Answers'}</span>
@@ -978,8 +748,55 @@ const ReadingTest = () => {
               </button>
             </div>
           )}
-        </section>
-      </div>
+        </div>
+      </main>
+
+      {/* Floating Action Menu for Text Selection */}
+      {selection && !askTeacherText && (
+        <div
+          className="fixed z-[100] animate-in fade-in zoom-in-95 duration-200"
+          style={{
+            top: Math.max(10, selection.rect.top - 60) + 'px',
+            left: selection.rect.left + (selection.rect.width / 2) + 'px',
+            transform: 'translateX(-50%)'
+          }}
+        >
+          <div className="bg-slate-900 shadow-xl rounded-xl flex items-center p-1.5 text-white/90 gap-1 ring-1 ring-slate-800/50">
+            {VOCAB_MAP[selection.text.toLowerCase()] && (
+              <div className="px-3 py-1.5 border-r border-slate-700 max-w-[200px] truncate text-sm">
+                {VOCAB_MAP[selection.text.toLowerCase()].meaning}
+              </div>
+            )}
+            <button
+              onClick={() => playAudio(selection.text)}
+              className="p-2 hover:bg-slate-800 hover:text-white rounded-lg transition-colors flex items-center gap-2"
+              title="Listen"
+            >
+              <Volume2 size={16} />
+            </button>
+            <button
+              onClick={() => saveToVocabVault(selection.text)}
+              className={`p-2 rounded-lg transition-colors flex items-center gap-2 ${savedSelection ? 'text-emerald-400 bg-emerald-400/10' : 'hover:bg-slate-800 hover:text-amber-400'}`}
+              title="Save to Vault"
+            >
+              {savedSelection ? <Check size={16} /> : <Plus size={16} />}
+            </button>
+            {user?.role === 'student' && (
+              <button
+                onClick={() => {
+                  setAskTeacherText(selection.text);
+                  window.getSelection().empty();
+                }}
+                className="p-2 hover:bg-slate-800 hover:text-violet-400 rounded-lg transition-colors flex items-center gap-2"
+                title="Ask Teacher"
+              >
+                <HelpCircle size={16} />
+              </button>
+            )}
+          </div>
+          <div className="w-3 h-3 bg-slate-900 absolute left-1/2 -bottom-1.5 transform -translate-x-1/2 rotate-45 border-r border-b border-slate-800/50"></div>
+        </div>
+      )}
 
       {askTeacherText && (
         <AskTeacherPopup
@@ -993,3 +810,4 @@ const ReadingTest = () => {
 };
 
 export default ReadingTest;
+
