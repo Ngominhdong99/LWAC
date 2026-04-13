@@ -12,11 +12,8 @@ const TYPE_CONFIG = {
   speaking:  { label: 'Speaking',  color: 'bg-rose-50 text-rose-700',       borderColor: 'border-rose-200',    icon: Mic,        btnBg: 'bg-rose-100 text-rose-700 hover:bg-rose-200' },
 };
 
-// Extract group key from title: "Week 1 - Reading" -> "Week 1"
 const getGroupKey = (lesson) => {
-  const dashMatch = lesson.title?.match(/^(.+?)\s*[-\u2013\u2014]\s*/);
-  if (dashMatch) return dashMatch[1].trim();
-  return lesson.title || 'General';
+  return lesson.chapter || 'Uncategorized';
 };
 
 // Extract a sortable chapter number: "Chapter 3" -> 3, "Week 10" -> 10
@@ -237,9 +234,6 @@ const PracticeList = () => {
                             const isCompleted = lesson.status === 'completed';
                             const isInProgress = !isCompleted && lesson.hasProgress;
 
-                            // Extract the part after " - " as the display title within the group
-                            const displayTitle = lesson.title?.replace(/^.+?\s*[-\u2013\u2014]\s*/, '') || lesson.title;
-
                             return (
                               <div key={lesson.assignment_id} className={`p-4 rounded-xl border transition-all hover:shadow-md cursor-pointer flex flex-col ${isCompleted ? 'bg-slate-50/50 border-slate-100' : isInProgress ? 'bg-blue-50/30 border-blue-200 border-l-4' : `bg-white ${config.borderColor}`}`}>
                                 <div className="flex justify-between items-start mb-3">
@@ -262,7 +256,7 @@ const PracticeList = () => {
                                   {!isCompleted && !isInProgress && <span className="text-[10px] font-bold text-amber-500 bg-amber-50 px-2 py-0.5 rounded-md">Pending</span>}
                                 </div>
 
-                                <h3 className="text-base font-bold text-slate-800 mb-1 leading-snug">{displayTitle}</h3>
+                                <h3 className="text-base font-bold text-slate-800 mb-1 leading-snug">{lesson.title}</h3>
                                 {lesson.chapter && (
                                   <p className="text-[11px] text-slate-400 mb-2 flex items-center"><span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-semibold">{lesson.chapter}</span></p>
                                 )}
