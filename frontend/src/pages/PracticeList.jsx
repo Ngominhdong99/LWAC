@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { BookOpen, PenTool, Headphones, Mic, CheckCircle, Eye, PlayCircle, ChevronDown, ChevronUp, FolderOpen } from 'lucide-react';
+import { BookOpen, PenTool, Headphones, Mic, CheckCircle, Eye, PlayCircle, ChevronDown, ChevronUp, FolderOpen, Search, X } from 'lucide-react';
 import API_URL from '../api';
 
 const TYPE_CONFIG = {
@@ -31,6 +31,7 @@ const PracticeList = () => {
     const [lessons, setLessons] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all');
+    const [search, setSearch] = useState('');
     const [collapsedSections, setCollapsedSections] = useState({});
     const navigate = useNavigate();
 
@@ -92,7 +93,13 @@ const PracticeList = () => {
       setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
-    const filteredLessons = filter === 'all' ? lessons : lessons.filter(l => l.type === filter);
+    const filteredLessons = lessons.filter(l => {
+      const matchType = filter === 'all' || l.type === filter;
+      const matchSearch = !search || 
+        l.title?.toLowerCase().includes(search.toLowerCase()) ||
+        l.chapter?.toLowerCase().includes(search.toLowerCase());
+      return matchType && matchSearch;
+    });
     const counts = {
       all: lessons.length,
       reading: lessons.filter(l => l.type === 'reading').length,
@@ -146,6 +153,32 @@ const PracticeList = () => {
                 </button>
               ))}
             </div>
+
+            {/* Search Bar */}
+            <div className="relative">
+              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search by title or chapter..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-11 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-transparent transition-all shadow-sm"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+
+            {search && (
+              <p className="text-sm text-slate-500">
+                Found <span className="font-bold text-slate-700">{filteredLessons.length}</span> result{filteredLessons.length !== 1 ? 's' : ''} for "<span className="font-medium text-primary-600">{search}</span>"
+              </p>
+            )}
 
             {/* Grouped Sections */}
             <div className="space-y-5">
