@@ -679,12 +679,18 @@ const StudentManager = () => {
                   const studentAns = viewingResult.result.responses?.[q.id];
                   let isCorrect = false;
                   
+                  const normalizeAns = (t) => {
+                    let s = (t || '').trim().toLowerCase().replace(/[.,!?;:]+$/, '').trim();
+                    const ctr = {"don't":"do not","doesn't":"does not","didn't":"did not","can't":"cannot","couldn't":"could not","won't":"will not","wouldn't":"would not","shouldn't":"should not","mustn't":"must not","isn't":"is not","aren't":"are not","wasn't":"was not","weren't":"were not","hasn't":"has not","haven't":"have not","hadn't":"had not","i'm":"i am","you're":"you are","we're":"we are","they're":"they are","he's":"he is","she's":"she is","it's":"it is","that's":"that is","there's":"there is","let's":"let us"};
+                    for (const [c, e] of Object.entries(ctr)) { s = s.replace(new RegExp(`\\b${c}\\b`, 'g'), e); }
+                    return s.replace(/\s+/g, ' ').trim();
+                  };
                   if (q.type === 'multiple_choice') {
                     isCorrect = studentAns === q.correct_answer;
                   } else if (q.type === 'fill_blank' || q.type === 'written_answer') {
-                    const trimmed = (studentAns || '').trim().toLowerCase();
-                    const accepted = (q.correct_answer || '').split('|').map(a => a.trim().toLowerCase());
-                    isCorrect = accepted.some(a => a === trimmed);
+                    const normalized = normalizeAns(studentAns);
+                    const accepted = (q.correct_answer || '').split('|').map(a => normalizeAns(a));
+                    isCorrect = accepted.some(a => a === normalized);
                   }
 
                   return (

@@ -8,12 +8,40 @@ import { ArrowLeft, ArrowRight, Play, Pause, RotateCcw, CheckCircle, Headphones,
 import API_URL from '../api';
 import { speakNatural, cancelSpeech } from '../utils/tts';
 
+// Common contractions for flexible answer matching
+const CONTRACTIONS = {
+  "don't": "do not", "doesn't": "does not", "didn't": "did not",
+  "can't": "cannot", "couldn't": "could not", "won't": "will not",
+  "wouldn't": "would not", "shouldn't": "should not", "mustn't": "must not",
+  "isn't": "is not", "aren't": "are not", "wasn't": "was not", "weren't": "were not",
+  "hasn't": "has not", "haven't": "have not", "hadn't": "had not",
+  "i'm": "i am", "you're": "you are", "we're": "we are", "they're": "they are",
+  "he's": "he is", "she's": "she is", "it's": "it is", "that's": "that is",
+  "there's": "there is", "here's": "here is", "what's": "what is", "who's": "who is",
+  "i've": "i have", "you've": "you have", "we've": "we have", "they've": "they have",
+  "i'll": "i will", "you'll": "you will", "we'll": "we will", "they'll": "they will",
+  "he'll": "he will", "she'll": "she will", "it'll": "it will",
+  "i'd": "i would", "you'd": "you would", "we'd": "we would", "they'd": "they would",
+  "he'd": "he would", "she'd": "she would", "let's": "let us",
+};
+
+const normalizeAnswer = (text) => {
+  let s = (text || '').trim().toLowerCase();
+  s = s.replace(/[.,!?;:]+$/, '').trim(); // strip trailing punctuation
+  for (const [contraction, expanded] of Object.entries(CONTRACTIONS)) {
+    s = s.replace(new RegExp(`\\b${contraction.replace("'", "'")}\\b`, 'g'), expanded);
+    s = s.replace(new RegExp(`\\b${contraction}\\b`, 'g'), expanded);
+  }
+  s = s.replace(/\s+/g, ' ').trim(); // collapse whitespace
+  return s;
+};
+
 // Check if user's answer matches any accepted correct answer (supports pipe-separated alternatives)
 const checkSingleBlank = (userAnswer, correctAnswer) => {
-  const trimmed = (userAnswer || '').trim().toLowerCase();
-  if (!trimmed) return false;
-  const acceptedAnswers = (correctAnswer || '').split('|').map(a => a.trim().toLowerCase());
-  return acceptedAnswers.some(a => a === trimmed);
+  const normalized = normalizeAnswer(userAnswer);
+  if (!normalized) return false;
+  const acceptedAnswers = (correctAnswer || '').split('|').map(a => normalizeAnswer(a));
+  return acceptedAnswers.some(a => a === normalized);
 };
 
 const getBlankCount = (correctAnswer) => {
