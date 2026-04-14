@@ -39,11 +39,14 @@ _CONTRACTIONS = {
 def __normalize_answer(text: str) -> str:
     """Normalize an answer for flexible comparison:
     1. Lowercase + strip
-    2. Remove trailing punctuation (. , ! ? ;)
-    3. Expand contractions (don't -> do not)
-    4. Collapse multiple spaces
+    2. Replace smart quotes with standard apostrophes
+    3. Remove trailing punctuation (. , ! ? ;)
+    4. Expand contractions (don't -> do not)
+    5. Collapse multiple spaces
     """
     s = (text or "").strip().lower()
+    # Replace smart quotes with standard apostrophes
+    s = s.replace('\u2019', "'").replace('‘', "'")
     # Remove trailing punctuation
     s = _re.sub(r'[.,!?;:]+$', '', s).strip()
     # Expand contractions

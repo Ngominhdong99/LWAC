@@ -27,6 +27,7 @@ const CONTRACTIONS = {
 
 const normalizeAnswer = (text) => {
   let s = (text || '').trim().toLowerCase();
+  s = s.replace(/\u2019/g, "'").replace(/\u2018/g, "'"); // smart quotes
   s = s.replace(/[.,!?;:]+$/, '').trim(); // strip trailing punctuation
   for (const [contraction, expanded] of Object.entries(CONTRACTIONS)) {
     s = s.replace(new RegExp(`\\b${contraction.replace("'", "'")}\\b`, 'g'), expanded);
