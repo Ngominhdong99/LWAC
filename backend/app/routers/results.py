@@ -16,12 +16,52 @@ def read_results(user_id: int, skip: int = 0, limit: int = 100, db: Session = De
     results = db.query(models.Result).filter(models.Result.user_id == user_id).offset(skip).limit(limit).all()
     return results
 
+import re as _re
+
+# Common English contractions mapped to their expanded forms
+_CONTRACTIONS = {
+    "don't": "do not", "doesn't": "does not", "didn't": "did not",
+    "can't": "cannot", "couldn't": "could not", "won't": "will not",
+    "wouldn't": "would not", "shouldn't": "should not", "mustn't": "must not",
+    "isn't": "is not", "aren't": "are not", "wasn't": "was not", "weren't": "were not",
+    "hasn't": "has not", "haven't": "have not", "hadn't": "had not",
+    "i'm": "i am", "you're": "you are", "we're": "we are", "they're": "they are",
+    "he's": "he is", "she's": "she is", "it's": "it is", "that's": "that is",
+    "there's": "there is", "here's": "here is", "what's": "what is", "who's": "who is",
+    "i've": "i have", "you've": "you have", "we've": "we have", "they've": "they have",
+    "i'll": "i will", "you'll": "you will", "we'll": "we will", "they'll": "they will",
+    "he'll": "he will", "she'll": "she will", "it'll": "it will",
+    "i'd": "i would", "you'd": "you would", "we'd": "we would", "they'd": "they would",
+    "he'd": "he would", "she'd": "she would",
+    "let's": "let us",
+}
+
+def __normalize_answer(text: str) -> str:
+    """Normalize an answer for flexible comparison:
+    1. Lowercase + strip
+    2. Replace smart quotes with standard apostrophes
+    3. Remove trailing punctuation (. , ! ? ;)
+    4. Expand contractions (don't -> do not)
+    5. Collapse multiple spaces
+    """
+    s = (text or "").strip().lower()
+    # Replace smart quotes with standard apostrophes
+    s = s.replace('\u2019', "'").replace('‘', "'")
+    # Remove trailing punctuation
+    s = _re.sub(r'[.,!?;:]+$', '', s).strip()
+    # Expand contractions
+    for contraction, expanded in _CONTRACTIONS.items():
+        s = _re.sub(r'\b' + _re.escape(contraction) + r'\b', expanded, s)
+    # Collapse multiple spaces
+    s = _re.sub(r'\s+', ' ', s).strip()
+    return s
+
 def __check_single_blank(user_answer: str, correct_answer: str) -> bool:
-    trimmed = (user_answer or "").strip().lower()
-    if not trimmed:
+    normalized_user = __normalize_answer(user_answer)
+    if not normalized_user:
         return False
-    accepted = [a.strip().lower() for a in (correct_answer or "").split("|")]
-    return trimmed in accepted
+    accepted = [__normalize_answer(a) for a in (correct_answer or "").split("|")]
+    return normalized_user in accepted
 
 def __check_written_answer(user_answer: str, correct_answer: str) -> bool:
     parts = (correct_answer or "").split(";")
