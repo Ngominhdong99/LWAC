@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { BookOpen, PenTool, Headphones, Mic, CheckCircle, Eye, PlayCircle, ChevronDown, ChevronUp, FolderOpen } from 'lucide-react';
+import { BookOpen, PenTool, Headphones, Mic, CheckCircle, Eye, PlayCircle, ChevronDown, ChevronUp, FolderOpen, Search, X } from 'lucide-react';
 import API_URL from '../api';
 
 const TYPE_CONFIG = {
@@ -12,11 +12,8 @@ const TYPE_CONFIG = {
   speaking:  { label: 'Speaking',  color: 'bg-rose-50 text-rose-700',       borderColor: 'border-rose-200',    icon: Mic,        btnBg: 'bg-rose-100 text-rose-700 hover:bg-rose-200' },
 };
 
-// Extract group key from title: "Week 1 - Reading" -> "Week 1"
 const getGroupKey = (lesson) => {
-  const dashMatch = lesson.title?.match(/^(.+?)\s*[-\u2013\u2014]\s*/);
-  if (dashMatch) return dashMatch[1].trim();
-  return lesson.title || 'General';
+  return lesson.chapter || 'Uncategorized';
 };
 
 // Extract a sortable chapter number: "Chapter 3" -> 3, "Week 10" -> 10
@@ -31,6 +28,7 @@ const PracticeList = () => {
     const [lessons, setLessons] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all');
+    const [search, setSearch] = useState('');
     const [collapsedSections, setCollapsedSections] = useState({});
     const navigate = useNavigate();
 
@@ -92,7 +90,13 @@ const PracticeList = () => {
       setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
-    const filteredLessons = filter === 'all' ? lessons : lessons.filter(l => l.type === filter);
+    const filteredLessons = lessons.filter(l => {
+      const matchType = filter === 'all' || l.type === filter;
+      const matchSearch = !search || 
+        l.title?.toLowerCase().includes(search.toLowerCase()) ||
+        l.chapter?.toLowerCase().includes(search.toLowerCase());
+      return matchType && matchSearch;
+    });
     const counts = {
       all: lessons.length,
       reading: lessons.filter(l => l.type === 'reading').length,
@@ -146,6 +150,32 @@ const PracticeList = () => {
                 </button>
               ))}
             </div>
+
+            {/* Search Bar */}
+            <div className="relative">
+              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search by title or chapter..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-11 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-transparent transition-all shadow-sm"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+
+            {search && (
+              <p className="text-sm text-slate-500">
+                Found <span className="font-bold text-slate-700">{filteredLessons.length}</span> result{filteredLessons.length !== 1 ? 's' : ''} for "<span className="font-medium text-primary-600">{search}</span>"
+              </p>
+            )}
 
             {/* Grouped Sections */}
             <div className="space-y-5">
@@ -204,9 +234,6 @@ const PracticeList = () => {
                             const isCompleted = lesson.status === 'completed';
                             const isInProgress = !isCompleted && lesson.hasProgress;
 
-                            // Extract the part after " - " as the display title within the group
-                            const displayTitle = lesson.title?.replace(/^.+?\s*[-\u2013\u2014]\s*/, '') || lesson.title;
-
                             return (
                               <div key={lesson.assignment_id} className={`p-4 rounded-xl border transition-all hover:shadow-md cursor-pointer flex flex-col ${isCompleted ? 'bg-slate-50/50 border-slate-100' : isInProgress ? 'bg-blue-50/30 border-blue-200 border-l-4' : `bg-white ${config.borderColor}`}`}>
                                 <div className="flex justify-between items-start mb-3">
@@ -229,7 +256,7 @@ const PracticeList = () => {
                                   {!isCompleted && !isInProgress && <span className="text-[10px] font-bold text-amber-500 bg-amber-50 px-2 py-0.5 rounded-md">Pending</span>}
                                 </div>
 
-                                <h3 className="text-base font-bold text-slate-800 mb-1 leading-snug">{displayTitle}</h3>
+                                <h3 className="text-base font-bold text-slate-800 mb-1 leading-snug">{lesson.title}</h3>
                                 {lesson.chapter && (
                                   <p className="text-[11px] text-slate-400 mb-2 flex items-center"><span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-semibold">{lesson.chapter}</span></p>
                                 )}
