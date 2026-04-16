@@ -1,0 +1,17 @@
+node_modules/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.venv/
+venv/
+lwac.db
+*.db
+.DS_Store
+static/
+*.pyc
+.env
+.git

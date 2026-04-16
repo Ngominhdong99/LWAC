@@ -3,19 +3,30 @@ import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.database import SessionLocal, engine
-from app import models
-from app.models import Base
+from database import SessionLocal, engine
+import models
+from models import Base
 
 # Create tables
 Base.metadata.create_all(bind=engine)
+
 
 def seed_data():
     db = SessionLocal()
     try:
         # Create a test student and teacher
-        student = models.User(username="learner1", email="learner@test.com", role="student", hashed_password="hashed")
-        teacher = models.User(username="coach_amateur", email="coach@test.com", role="teacher", hashed_password="hashed")
+        student = models.User(
+            username="learner1",
+            email="learner@test.com",
+            role="student",
+            hashed_password="hashed",
+        )
+        teacher = models.User(
+            username="coach_amateur",
+            email="coach@test.com",
+            role="teacher",
+            hashed_password="hashed",
+        )
         db.add_all([student, teacher])
         db.commit()
 
@@ -26,9 +37,12 @@ def seed_data():
             type="reading",
             content={
                 "paragraphs": [
-                    {"id": "p1", "text": "Tea is the second most consumed beverage in the world, after water. Originating in China, it has a history spanning thousands of years."}
+                    {
+                        "id": "p1",
+                        "text": "Tea is the second most consumed beverage in the world, after water. Originating in China, it has a history spanning thousands of years.",
+                    }
                 ]
-            }
+            },
         )
         db.add(lesson1)
         db.commit()
@@ -39,7 +53,7 @@ def seed_data():
             type="multiple_choice",
             question_text="What is the most consumed beverage in the world?",
             options={"A": "Tea", "B": "Coffee", "C": "Water", "D": "Milk"},
-            correct_answer="C"
+            correct_answer="C",
         )
         db.add(q1)
         db.commit()
@@ -48,9 +62,9 @@ def seed_data():
         vocab1 = models.VocabVault(
             user_id=student.id,
             word="beverage",
-            meaning="Đồ uống, thức uống (ngoại trừ nước lọc)",
+            meaning="a drink; any liquid intended for drinking other than plain water",
             ipa="/ˈbev.ər.ɪdʒ/",
-            source_lesson_id=lesson1.id
+            source_lesson_id=lesson1.id,
         )
         db.add(vocab1)
         db.commit()
@@ -61,6 +75,7 @@ def seed_data():
         db.rollback()
     finally:
         db.close()
+
 
 if __name__ == "__main__":
     seed_data()

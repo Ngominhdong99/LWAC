@@ -1,3 +1,5 @@
+import re as _re
+
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
@@ -16,7 +18,6 @@ def read_results(user_id: int, skip: int = 0, limit: int = 100, db: Session = De
     results = db.query(models.Result).filter(models.Result.user_id == user_id).offset(skip).limit(limit).all()
     return results
 
-import re as _re
 
 # Common English contractions mapped to their expanded forms
 _CONTRACTIONS = {
@@ -84,7 +85,7 @@ def create_result(user_id: int, result: schemas.ResultCreate, db: Session = Depe
     db_user = db.query(models.User).filter(models.User.id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
-    from datetime import datetime
+    from datetime import datetime, UTC
     
     assignment = db.query(models.Assignment).filter(
         models.Assignment.student_id == user_id,
@@ -96,7 +97,7 @@ def create_result(user_id: int, result: schemas.ResultCreate, db: Session = Depe
             raise HTTPException(status_code=400, detail="Assignment already completed. Retake not allowed.")
             
         assignment.status = "completed"
-        assignment.completed_at = datetime.utcnow()
+        assignment.completed_at = datetime.now(UTC)
         assignment.allow_retake = False
         # result_id is set below after creating the result
     else:

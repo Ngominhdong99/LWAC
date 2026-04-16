@@ -1,0 +1,139 @@
+name: "Staging Pipeline"
+
+on:
+  push:
+    branches: [ "stg" ]
+  pull_request:
+    branches: [ "stg" ]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  REGISTRY: ghcr.io
+  IMAGE_BACKEND: ghcr.io/ngominhdong99/lwac-backend
+  IMAGE_FRONTEND: ghcr.io/ngominhdong99/lwac-frontend
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  quality-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          pip install uv
+          uv python install 3.13
+      - working-directory: backend
+        run: |
+          uv sync --frozen
+          uv run ruff check .
+          uv run pytest -q
+
+  build-and-push:
+    needs: quality-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set tag
+        run: echo "SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ env.IMAGE_BACKEND }}:stg,${{ env.IMAGE_BACKEND }}:stg-${{ env.SHA }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ env.IMAGE_FRONTEND }}:stg,${{ env.IMAGE_FRONTEND }}:stg-${{ env.SHA }}
+          build-args: |
+            VITE_API_URL=${{ secrets.VITE_API_URL }}
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: STG
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare SHA tag
+        run: echo "SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
+      - uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Verify Environment
+        run: |
+          echo "======================================================="
+          echo "🚀 DEPLOYING TO ENVIRONMENT: STAGING"
+          echo "IP Target: 100.109.81.74"
+          echo "======================================================="
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh 
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "100.109.81.74" >> ~/.ssh/known_hosts
+
+      - name: Deploy via SSH
+        run: |
+          ssh yuntuobiedakid@"100.109.81.74" << EOF
+            set -eux
+            DEPLOY_DIR="\${STG_DEPLOY_PATH:-/home/yuntuobiedakid/Work/LWAC-stg}"
+            
+            if [ ! -d "\$DEPLOY_DIR/.git" ]; then
+                rm -rf \$DEPLOY_DIR
+                git clone "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \$DEPLOY_DIR
+            fi
+            
+            cd \$DEPLOY_DIR
+            git fetch --all --prune
+            git fetch origin '+refs/pull/*:refs/remotes/origin/pull/*' || true
+            git checkout -f ${{ github.sha }}
+
+            echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            cat > /dev/shm/.env.lwac-stg <<INNER_EOF
+            VITE_API_URL=${{ secrets.VITE_API_URL }}
+            PLATFORM_URL=${{ secrets.PLATFORM_URL }}
+            HTTP_PORT=80
+            BACKEND_PORT=8000
+            DB_PASS=${{ secrets.DB_PASS }}
+            DB_USER=${{ secrets.DB_USER }}
+            DB_NAME=${{ secrets.DB_NAME }}
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
+            SECRET_KEY=${{ secrets.SECRET_KEY }}
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            SMTP_SERVER=${{ secrets.SMTP_SERVER }}
+            SMTP_PORT=${{ secrets.SMTP_PORT }}
+            EMAIL_USERNAME=${{ secrets.EMAIL_USERNAME }}
+            EMAIL_PASSWORD=${{ secrets.EMAIL_PASSWORD }}
+            EMAIL_FROM_NAME=${{ secrets.EMAIL_FROM_NAME }}
+            EMAIL_COACH_NAME=${{ secrets.EMAIL_COACH_NAME }}
+            BACKEND_TAG=stg-${{ env.SHA }}
+            FRONTEND_TAG=stg-${{ env.SHA }}
+            INNER_EOF
+
+            docker compose --env-file /dev/shm/.env.lwac-stg pull
+            docker compose --env-file /dev/shm/.env.lwac-stg -p lwac-stg up -d --remove-orphans
+            
+            rm -f /dev/shm/.env.lwac-stg
+            
+            docker logout ghcr.io
+            docker image prune -a -f
+          EOF

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{
+            font-family: 'Inter', sans-serif, Arial;
+            background-color: #f8fafc;
+            margin: 0;
+            padding: 30px;
+            color: #334155;
+        }}
+        .container {{
+            max-width: 600px;
+            background: #ffffff;
+            border-radius: 16px;
+            overflow: hidden;
+            margin: 0 auto;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e2e8f0;
+        }}
+        .header {{
+            background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+            padding: 30px;
+            text-align: center;
+        }}
+        .header h1 {{
+            color: #ffffff;
+            margin: 0;
+            font-size: 24px;
+            letter-spacing: 0.5px;
+        }}
+        .content {{
+            padding: 40px 30px;
+            line-height: 1.6;
+        }}
+        h2 {{
+            color: #0d9488;
+            font-size: 20px;
+            margin-top: 0;
+        }}
+        .highlight-box {{
+            background: #f0fdfa;
+            border-left: 4px solid #14b8a6;
+            padding: 15px 20px;
+            border-radius: 0 8px 8px 0;
+            margin: 20px 0;
+        }}
+        .btn {{
+            display: inline-block;
+            background: #0d9488;
+            color: #ffffff !important;
+            text-decoration: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            margin-top: 20px;
+            text-align: center;
+        }}
+        .footer {{
+            background: #f1f5f9;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #64748b;
+            border-top: 1px solid #e2e8f0;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>SIT. Steps to IELTS</h1>
+        </div>
+        <div class="content">
+            {content}
+            <div style="text-align: center; margin-top: 30px;">
+                <a href="{link}" class="btn">View on Dashboard</a>
+            </div>
+        </div>
+        <div class="footer">
+            <p>This is an automated message from the Minh Dong IELTS Learning Platform.</p>
+            <p>&copy; 2024 SIT Platform. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,22 +1,50 @@
-# Backend
+# Secrets and local env
+.env
+.env.*
+*.env
+*.local
 backend/.env
-backend/venv/
-backend/lwac.db
-backend/__pycache__/
-backend/app/__pycache__/
-backend/app/routers/__pycache__/
-backend/app/services/__pycache__/
-backend/app/models/__pycache__/
-backend/app/schemas/__pycache__/
-backend/static/audio/
-*.pyc
+frontend/.env
+frontend/.env.*
 
-# Frontend
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.python-version
+.venv/
+venv/
+env/
+backend/venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Local databases and logs
+*.db
+*.sqlite
+*.sqlite3
+*.log
+logs/
+backend/lwac.db
+
+# Frontend build and package artifacts
+node_modules/
 frontend/node_modules/
+dist/
+dist-ssr/
 frontend/dist/
 frontend/dist-ssr/
+coverage/
 
-# IDE
+# Generated assets
+static/audio/
+
+# IDE and OS files
 .vscode/
 .idea/
 *.suo
@@ -25,3 +53,9 @@ frontend/dist-ssr/
 *.sln
 *.sw?
 .DS_Store
+
+# AI Assistant docs
+CLAUDE.md
+GEMINI.md
+SECURITY.md
+agent.md
