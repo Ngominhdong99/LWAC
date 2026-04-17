@@ -89,6 +89,27 @@ jobs:
             DEPLOY_DIR="\${DEPLOY_DIR:-/srv/lwac}"
 
             mkdir -p "\$(dirname "\$DEPLOY_DIR")"
+            if [ ! -d "\$DEPLOY_DIR" ]; then
+              echo "Creating deploy directory: \$DEPLOY_DIR"
+              mkdir -p "\$DEPLOY_DIR" || {
+                echo "ERROR: Cannot create DEPLOY_PATH=\$DEPLOY_DIR"
+                echo "Provision it first, for example:"
+                echo "  sudo mkdir -p \$DEPLOY_DIR"
+                echo "  sudo chown -R \$(whoami):\$(id -gn) \$DEPLOY_DIR"
+                exit 1
+              }
+            fi
+
+            if [ ! -w "\$DEPLOY_DIR" ]; then
+              echo "ERROR: DEPLOY_PATH is not writable: \$DEPLOY_DIR"
+              echo "Current user: \$(whoami)"
+              echo "Directory details:"
+              ls -ld "\$DEPLOY_DIR" || true
+              echo "Fix it with something like:"
+              echo "  sudo chown -R \$(whoami):\$(id -gn) \$DEPLOY_DIR"
+              exit 1
+            fi
+
             if [ ! -d "\$DEPLOY_DIR/.git" ]; then
               rm -rf \$DEPLOY_DIR
               git clone "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \$DEPLOY_DIR
