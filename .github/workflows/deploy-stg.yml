@@ -13,6 +13,7 @@ env:
   IMAGE_BACKEND: ghcr.io/ngominhdong99/lwac-backend
   IMAGE_FRONTEND: ghcr.io/ngominhdong99/lwac-frontend
   SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+  SOURCE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref_name }}
 
 permissions:
   contents: read
@@ -66,7 +67,6 @@ jobs:
             VITE_API_URL=${{ secrets.VITE_API_URL }}
 
   deploy:
-    if: github.event_name == 'push'
     needs: build-and-push
     runs-on: ubuntu-latest
     environment: STG
@@ -75,7 +75,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Prepare SHA tag
-        run: echo "SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+        run: |
+          echo "SHA=${SOURCE_SHA::7}" >> $GITHUB_ENV
+          echo "SOURCE_REF=${SOURCE_REF}" >> $GITHUB_ENV
 
       - uses: tailscale/github-action@v4
         with:
@@ -99,7 +101,7 @@ jobs:
 
       - name: Deploy via SSH
         run: |
-          ssh yuntuobiedakid@"100.109.81.74" << EOF
+          ssh yuntuobiedakid@"100.109.81.74" << EOF2
             set -eux
             DEPLOY_DIR="\${STG_DEPLOY_PATH:-/home/yuntuobiedakid/Work/LWAC-stg}"
             
@@ -110,8 +112,9 @@ jobs:
             
             cd \$DEPLOY_DIR
             git fetch --all --prune
-            git fetch origin '+refs/pull/*:refs/remotes/origin/pull/*' || true
-            git checkout -f ${{ github.sha }}
+            git fetch origin "${{ env.SOURCE_REF }}"
+            git checkout -B "${{ env.SOURCE_REF }}" "origin/${{ env.SOURCE_REF }}"
+            git reset --hard "${{ env.SOURCE_SHA }}"
 
             echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
@@ -143,4 +146,4 @@ jobs:
             
             docker logout ghcr.io
             docker image prune -a -f
-          EOF
+          EOF2
