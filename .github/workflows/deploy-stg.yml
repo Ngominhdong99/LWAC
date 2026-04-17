@@ -104,6 +104,12 @@ jobs:
           ssh yuntuobiedakid@"100.109.81.74" << EOF2
             set -eux
             DEPLOY_DIR="\${STG_DEPLOY_PATH:-/home/yuntuobiedakid/Work/LWAC-stg}"
+            echo "===== SERVER CONTEXT ====="
+            hostname
+            whoami
+            pwd
+            date
+            echo "DEPLOY_DIR=\$DEPLOY_DIR"
             
             if [ ! -d "\$DEPLOY_DIR/.git" ]; then
                 rm -rf \$DEPLOY_DIR
@@ -111,10 +117,20 @@ jobs:
             fi
             
             cd \$DEPLOY_DIR
+            echo "===== GIT BEFORE ====="
+            git status --short --branch || true
+            git rev-parse HEAD || true
             git fetch --all --prune
             git fetch origin "${{ env.SOURCE_REF }}"
             git checkout -B "${{ env.SOURCE_REF }}" "origin/${{ env.SOURCE_REF }}"
             git reset --hard "${{ env.SOURCE_SHA }}"
+            echo "===== GIT AFTER ====="
+            git status --short --branch
+            git rev-parse HEAD
+            git log --oneline -n 3
+            echo "===== DOCKER BEFORE LOGIN ====="
+            docker images --format 'table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.CreatedSince}}' | (grep -E 'REPOSITORY|lwac-(frontend|backend)' || true)
+            docker ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}' | (grep -E 'NAMES|lwac' || true)
 
             echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
@@ -139,8 +155,17 @@ jobs:
             FRONTEND_TAG=stg-${{ env.SHA }}
             INNER_EOF
 
+            echo "===== ENV FILE ====="
+            cat /dev/shm/.env.lwac-stg
+            echo "===== DOCKER PULL ====="
             docker compose --env-file /dev/shm/.env.lwac-stg pull
+            echo "===== DOCKER UP ====="
             docker compose --env-file /dev/shm/.env.lwac-stg -p lwac-stg up -d --remove-orphans
+            echo "===== DOCKER AFTER UP ====="
+            docker compose --env-file /dev/shm/.env.lwac-stg -p lwac-stg ps
+            docker ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}' | (grep -E 'NAMES|lwac' || true)
+            echo "===== PORT CHECK ====="
+            ss -ltnp | (grep ':80 ' || true)
             
             rm -f /dev/shm/.env.lwac-stg
             
