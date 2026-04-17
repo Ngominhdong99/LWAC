@@ -105,10 +105,10 @@ jobs:
             set -eux
             DEPLOY_DIR="\${STG_DEPLOY_PATH:-/home/yuntuobiedakid/Work/LWAC-stg}"
             echo "===== SERVER CONTEXT ====="
-            hostname
-            whoami
-            pwd
-            date
+            uname -n || true
+            whoami || true
+            pwd || true
+            date || true
             echo "DEPLOY_DIR=\$DEPLOY_DIR"
             
             if [ ! -d "\$DEPLOY_DIR/.git" ]; then
@@ -125,9 +125,9 @@ jobs:
             git checkout -B "${{ env.SOURCE_REF }}" "origin/${{ env.SOURCE_REF }}"
             git reset --hard "${{ env.SOURCE_SHA }}"
             echo "===== GIT AFTER ====="
-            git status --short --branch
-            git rev-parse HEAD
-            git log --oneline -n 3
+            git status --short --branch || true
+            git rev-parse HEAD || true
+            git log --oneline -n 3 || true
             echo "===== DOCKER BEFORE LOGIN ====="
             docker images --format 'table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.CreatedSince}}' | (grep -E 'REPOSITORY|lwac-(frontend|backend)' || true)
             docker ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}' | (grep -E 'NAMES|lwac' || true)
@@ -162,7 +162,7 @@ jobs:
             echo "===== DOCKER UP ====="
             docker compose --env-file /dev/shm/.env.lwac-stg -p lwac-stg up -d --remove-orphans
             echo "===== DOCKER AFTER UP ====="
-            docker compose --env-file /dev/shm/.env.lwac-stg -p lwac-stg ps
+            docker compose --env-file /dev/shm/.env.lwac-stg -p lwac-stg ps || true
             docker ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}' | (grep -E 'NAMES|lwac' || true)
             echo "===== PORT CHECK ====="
             ss -ltnp | (grep ':80 ' || true)
