@@ -111,11 +111,13 @@ jobs:
             fi
 
             if [ ! -d "\$DEPLOY_DIR/.git" ]; then
-              rm -rf \$DEPLOY_DIR
-              git clone "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \$DEPLOY_DIR
+              git init "\$DEPLOY_DIR"
             fi
 
             cd \$DEPLOY_DIR
+            git remote get-url origin >/dev/null 2>&1 \
+              && git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \
+              || git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
             git fetch --all --prune
             git fetch origin '+refs/pull/*:refs/remotes/origin/pull/*' || true
             git checkout -f ${{ github.sha }}
