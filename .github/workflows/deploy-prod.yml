@@ -4,6 +4,7 @@ on:
   push:
     branches: [ "main" ]
   pull_request:
+    types: [ opened, synchronize, reopened, ready_for_review ]
     branches: [ "main" ]
 
 env:
@@ -11,6 +12,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_BACKEND: ghcr.io/ngominhdong99/lwac-backend
   IMAGE_FRONTEND: ghcr.io/ngominhdong99/lwac-frontend
+  SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
 permissions:
   contents: read
@@ -21,9 +23,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
 
       - name: Set tag
-        run: echo "SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+        run: echo "SHA=${SOURCE_SHA::7}" >> $GITHUB_ENV
 
       - uses: docker/login-action@v3
         with:
@@ -46,6 +50,7 @@ jobs:
             VITE_API_URL=${{ secrets.VITE_API_URL }}
 
   deploy:
+    if: github.event_name == 'push'
     needs: build-and-push
     runs-on: ubuntu-latest
     environment: PROD
@@ -80,13 +85,15 @@ jobs:
         run: |
           ssh yuntuobiedakid@"${{ secrets.PROD_SERVER_TS_IP }}" << EOF
             set -eux
-            DEPLOY_DIR="\${PROD_DEPLOY_PATH:-/home/yuntuobiedakid/Work/LWAC}"
-            
+            DEPLOY_DIR="${{ vars.DEPLOY_PATH }}"
+            DEPLOY_DIR="\${DEPLOY_DIR:-/srv/lwac}"
+
+            mkdir -p "\$(dirname "\$DEPLOY_DIR")"
             if [ ! -d "\$DEPLOY_DIR/.git" ]; then
-                rm -rf \$DEPLOY_DIR
-                git clone "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \$DEPLOY_DIR
+              rm -rf \$DEPLOY_DIR
+              git clone "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \$DEPLOY_DIR
             fi
-            
+
             cd \$DEPLOY_DIR
             git fetch --all --prune
             git fetch origin '+refs/pull/*:refs/remotes/origin/pull/*' || true

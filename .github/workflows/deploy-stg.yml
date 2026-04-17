@@ -21,44 +21,55 @@ permissions:
 
 jobs:
   quality-check:
+    name: Quality Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Source
+        uses: actions/checkout@v4
         with:
           ref: ${{ env.SOURCE_SHA }}
-      - run: |
+
+      - name: Install uv
+        run: |
           pip install uv
           uv python install 3.13
-      - working-directory: backend
+
+      - name: Run Backend Checks
+        working-directory: backend
         run: |
           uv sync --frozen
           uv run ruff check .
           uv run pytest -q
 
   build-and-push:
+    name: Build And Push Images
     needs: quality-check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Source
+        uses: actions/checkout@v4
         with:
           ref: ${{ env.SOURCE_SHA }}
 
       - name: Set tag
         run: echo "SHA=${SOURCE_SHA::7}" >> $GITHUB_ENV
 
-      - uses: docker/login-action@v3
+      - name: Login To GHCR
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: docker/build-push-action@v6
+      - name: Build And Push Backend
+        uses: docker/build-push-action@v6
         with:
           context: ./backend
           push: true
           tags: ${{ env.IMAGE_BACKEND }}:stg,${{ env.IMAGE_BACKEND }}:stg-${{ env.SHA }}
 
-      - uses: docker/build-push-action@v6
+      - name: Build And Push Frontend
+        uses: docker/build-push-action@v6
         with:
           context: ./frontend
           push: true
@@ -67,19 +78,22 @@ jobs:
             VITE_API_URL=${{ secrets.VITE_API_URL }}
 
   deploy:
+    name: Deploy To STG
     needs: build-and-push
     runs-on: ubuntu-latest
     environment: STG
-    
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Source
+        uses: actions/checkout@v4
 
       - name: Prepare SHA tag
         run: |
           echo "SHA=${SOURCE_SHA::7}" >> $GITHUB_ENV
           echo "SOURCE_REF=${SOURCE_REF}" >> $GITHUB_ENV
 
-      - uses: tailscale/github-action@v4
+      - name: Connect To Tailscale
+        uses: tailscale/github-action@v4
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
@@ -94,7 +108,7 @@ jobs:
 
       - name: Setup SSH
         run: |
-          mkdir -p ~/.ssh 
+          mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "100.109.81.74" >> ~/.ssh/known_hosts
@@ -103,19 +117,21 @@ jobs:
         run: |
           ssh yuntuobiedakid@"100.109.81.74" << EOF2
             set -eux
-            DEPLOY_DIR="\${STG_DEPLOY_PATH:-/home/yuntuobiedakid/Work/LWAC-stg}"
+            DEPLOY_DIR="${{ vars.DEPLOY_PATH }}"
+            DEPLOY_DIR="\${DEPLOY_DIR:-/srv/lwac}"
             echo "===== SERVER CONTEXT ====="
             uname -n || true
             whoami || true
             pwd || true
             date || true
             echo "DEPLOY_DIR=\$DEPLOY_DIR"
-            
+
+            mkdir -p "\$(dirname "\$DEPLOY_DIR")"
             if [ ! -d "\$DEPLOY_DIR/.git" ]; then
-                rm -rf \$DEPLOY_DIR
-                git clone "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \$DEPLOY_DIR
+              rm -rf \$DEPLOY_DIR
+              git clone "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \$DEPLOY_DIR
             fi
-            
+
             cd \$DEPLOY_DIR
             echo "===== GIT BEFORE ====="
             git status --short --branch || true
@@ -166,9 +182,9 @@ jobs:
             docker ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}' | (grep -E 'NAMES|lwac' || true)
             echo "===== PORT CHECK ====="
             ss -ltnp | (grep ':80 ' || true)
-            
+
             rm -f /dev/shm/.env.lwac-stg
-            
+
             docker logout ghcr.io
             docker image prune -a -f
           EOF2
