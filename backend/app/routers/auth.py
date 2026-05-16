@@ -4,6 +4,7 @@ Uses simple token-based auth (JWT).
 """
 import os
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 from jose import jwt
@@ -15,6 +16,7 @@ from .. import models
 from ..database import get_db
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 SECRET_KEY = os.getenv("SECRET_KEY", "lwac-secret-key-change-in-production-2024")
 ALGORITHM = "HS256"
@@ -113,7 +115,7 @@ def list_users(db: Session = Depends(get_db)):
 
 
 @router.get("/me", response_model=UserResponse)
-def get_me(token: str, db: Session = Depends(get_db)):
+def get_me(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     user = get_current_user(token, db)
     return UserResponse(
         id=user.id,
